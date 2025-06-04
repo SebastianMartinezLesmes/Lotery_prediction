@@ -1,6 +1,6 @@
 import os
 from openpyxl import Workbook, load_workbook
-from API import obtener_resultados_históricos_astro
+from src.api.API import obtener_resultados_históricos_astro
 
 def guardar_resultados_en_excel(nombre_archivo="resultados_astro.xlsx"):
     resultados_nuevos = obtener_resultados_históricos_astro()
