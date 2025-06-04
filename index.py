@@ -1,16 +1,45 @@
 import subprocess
 import os
+from src.utils.logger import configurar_logger
 
-def ejecutar_script(nombre):
-    print(f"\n🚀 Ejecutando: {nombre}")
-    ruta = os.path.join(os.getcwd(), nombre)
-    subprocess.run(["python", ruta], check=True)
+log = configurar_logger()
+
+# Ruta a los scripts por orden de ejecución
+scripts = [
+    ("Dependencias", "src/utils/dependencias.py"),
+    ("Actualización de Excel", "src/excel/read_excel.py"),
+    ("Predicción", "prediction.py")
+]
+
+def ejecutar_script(nombre_amigable, ruta_script):
+    log.info(f"▶ Ejecutando: {nombre_amigable} ({ruta_script})")
+    print(f"🔧 {nombre_amigable}...")
+    try:
+        subprocess.run(["python", ruta_script], check=True)
+        log.info(f"✅ Completado: {nombre_amigable}")
+        print(f"✅ {nombre_amigable} completado.\n")
+        return True
+    except subprocess.CalledProcessError as e:
+        log.error(f"❌ Falló: {nombre_amigable} - {e}")
+        print(f"❌ Error en {nombre_amigable}. Detalles en el log.\n")
+        return False
 
 if __name__ == "__main__":
-    try:
-        ejecutar_script("dependencias.py")
-        ejecutar_script("API.py")
-        ejecutar_script("ecxel.py")
-        print("\n✅ Todos los scripts se ejecutaron correctamente.")
-    except subprocess.CalledProcessError as e:
-        print(f"\n❌ Error al ejecutar un script: {e}")
+    print("🎯 INICIO DE EJECUCIÓN DEL SISTEMA DE LOTERÍA\n" + "-"*45)
+
+    total = len(scripts)
+    correctos = 0
+
+    for nombre, ruta in scripts:
+        if ejecutar_script(nombre, ruta):
+            correctos += 1
+        else:
+            break  # Si un paso falla, detiene la cadena
+
+    print("🧾 RESUMEN FINAL")
+    print("-" * 45)
+    print(f"✔️ Scripts exitosos: {correctos}/{total}")
+    print(f"📂 Registro detallado: logs/log_loteria.log")
+    print("-" * 45)
+
+    log.info(f"🎯 Proceso completo: {correctos}/{total} scripts ejecutados.")
