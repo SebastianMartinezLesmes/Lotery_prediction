@@ -1,5 +1,5 @@
 import subprocess
-import os
+import sys  # Necesario para usar sys.executable
 from src.utils.logger import configurar_logger
 
 log = configurar_logger()
@@ -7,7 +7,7 @@ log = configurar_logger()
 # Ruta a los scripts por orden de ejecución
 scripts = [
     ("Dependencias", "src/utils/dependencias.py"),
-    ("Actualización de Excel", "src/excel/read_excel.py"),
+    ("Recolección de Datos", "src/excel/read_excel.py"),
     ("Predicción", "prediction.py")
 ]
 
@@ -15,7 +15,8 @@ def ejecutar_script(nombre_amigable, ruta_script):
     log.info(f"▶ Ejecutando: {nombre_amigable} ({ruta_script})")
     print(f"🔧 {nombre_amigable}...")
     try:
-        subprocess.run(["python", ruta_script], check=True)
+        modulo = ruta_script.replace("/", ".").replace(".py", "")
+        subprocess.run([sys.executable, "-m", modulo], check=True)
         log.info(f"✅ Completado: {nombre_amigable}")
         print(f"✅ {nombre_amigable} completado.\n")
         return True
