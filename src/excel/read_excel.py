@@ -2,9 +2,10 @@ from openpyxl import load_workbook
 from datetime import datetime, timedelta
 import os
 import subprocess
+import sys  # ← importante para sys.executable
 
 ARCHIVO = "resultados_astro.xlsx"
-SCRIPT_ACTUALIZACION = "excel.py"
+SCRIPT_ACTUALIZACION = "src/excel/excel.py"  # ← corregido
 
 def fecha_ayer():
     return (datetime.today() - timedelta(days=2)).date()
@@ -15,7 +16,7 @@ def obtener_ultima_fecha_excel():
         return None
 
     try:
-        wb = load_workbook(ARCHIVO, read_only=True)
+        wb = load_workbook(ARCHIVO)  # ← sin read_only=True
         ws = wb.active
 
         fecha_col = None
@@ -48,7 +49,7 @@ def obtener_ultima_fecha_excel():
 
 def ejecutar_actualizacion():
     print(f"⏳ Ejecutando actualización con {SCRIPT_ACTUALIZACION}...")
-    subprocess.run(["python", SCRIPT_ACTUALIZACION], check=True)
+    subprocess.run([sys.executable, SCRIPT_ACTUALIZACION], check=True)
     print("✅ Actualización completada.")
 
 if __name__ == "__main__":
