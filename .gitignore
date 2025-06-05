@@ -1,5 +1,28 @@
-# cache generada por el programa
+# 🔁 Archivos de caché de Python
+__pycache__/
 __pycache__
+*.py[cod]
+*.pyo
 
-# archivo de resultados del programa
+# 📝 Logs de ejecución
+logs/
+*.log
+
+# 📊 Resultados generados por el programa
 resultados_astro.xlsx
+
+# 🛠 Archivos temporales de entorno o IDE
+*.env
+*.venv
+.env/
+.venv/
+*.swp
+*.bak
+*.tmp
+
+# 🧠 Archivos de configuración específicos del sistema o IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
