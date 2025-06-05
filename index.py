@@ -1,12 +1,13 @@
 import subprocess
-import sys  # Necesario para usar sys.executable
+import sys
 from src.utils.logger import configurar_logger
+from src.utils.drop_cache import eliminar_pycache
 
 log = configurar_logger()
 
-# Ruta a los scripts por orden de ejecución
+# Scripts por orden de ejecución
 scripts = [
-    ("Dependencias", "src/utils/dependencias.py"),
+    ("Dependencias", "src/utils/dependencies.py"),
     ("Recolección de Datos", "src/excel/read_excel.py"),
     ("Predicción", "prediction.py")
 ]
@@ -35,7 +36,7 @@ if __name__ == "__main__":
         if ejecutar_script(nombre, ruta):
             correctos += 1
         else:
-            break  # Si un paso falla, detiene la cadena
+            break  # Detener si falla
 
     print("🧾 RESUMEN FINAL")
     print("-" * 45)
@@ -44,3 +45,6 @@ if __name__ == "__main__":
     print("-" * 45)
 
     log.info(f"🎯 Proceso completo: {correctos}/{total} scripts ejecutados.")
+
+    print("\n🧹 Limpiando cachés (__pycache__)...\n")
+    eliminar_pycache()
