@@ -9,7 +9,7 @@ log = configurar_logger()
 scripts = [
     ("Dependencias", "src/utils/dependencies.py"),
     ("Recolección de Datos", "src/excel/read_excel.py"),
-    ("Predicción", "prediction.py")
+    ("Predicción", "src/utils/prediction.py")
 ]
 
 def ejecutar_script(nombre_amigable, ruta_script):

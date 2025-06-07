@@ -13,27 +13,34 @@ def cargar_datos_excel():
     wb = load_workbook(ARCHIVO_EXCEL, read_only=True)
     ws = wb.active
 
+    # Leer encabezados, evitando valores None
     encabezados = [cell.value for cell in ws[1]]
-    indices = {nombre.lower(): i for i, nombre in enumerate(encabezados)}
+    indices = {nombre.lower(): i for i, nombre in enumerate(encabezados) if nombre is not None}
+
+    # Verificar columnas requeridas
+    requeridos = {"fecha", "lottery", "result", "series"}
+    faltantes = requeridos - set(indices.keys())
+    if faltantes:
+        print(f"❌ Faltan columnas requeridas: {faltantes}")
+        print(f"📋 Encabezados encontrados: {list(indices.keys())}")
+        return []
 
     filas = []
     for fila in ws.iter_rows(min_row=2, values_only=True):
         try:
-            fecha = fila[indices.get("fecha")]
+            fecha = fila[indices["fecha"]]
             if isinstance(fecha, str):
                 fecha = datetime.strptime(fecha, "%Y-%m-%d")
-            elif isinstance(fecha, datetime):
-                fecha = fecha
-            else:
+            elif not isinstance(fecha, datetime):
                 continue
 
             filas.append({
                 "fecha": fecha,
-                "lottery": fila[indices.get("lottery")],
-                "result": str(fila[indices.get("result")]).zfill(4),
-                "series": str(fila[indices.get("series")]).zfill(3)
+                "lottery": fila[indices["lottery"]],
+                "result": str(fila[indices["result"]]).zfill(4),
+                "series": str(fila[indices["series"]]).zfill(3)
             })
-        except:
+        except Exception as e:
             continue
 
     return filas
@@ -80,3 +87,5 @@ if __name__ == "__main__":
         pesos_resultado, pesos_serie = calcular_pesos(datos)
         predicciones = predecir(pesos_resultado, pesos_serie)
         mostrar_predicciones(predicciones)
+    else:
+        print("⚠️ No se pudieron cargar datos para la predicción.")
