@@ -5,10 +5,10 @@ import subprocess
 import sys  # ← importante para sys.executable
 
 ARCHIVO = "resultados_astro.xlsx"
-SCRIPT_ACTUALIZACION = "src/excel/excel.py"  # ← corregido
+SCRIPT_ACTUALIZACION = ["-m", "src.excel.excel"]
 
 def fecha_ayer():
-    return (datetime.today() - timedelta(days=2)).date()
+    return (datetime.today() - timedelta(days=1)).date()
 
 def obtener_ultima_fecha_excel():
     if not os.path.exists(ARCHIVO):
@@ -49,7 +49,7 @@ def obtener_ultima_fecha_excel():
 
 def ejecutar_actualizacion():
     print(f"⏳ Ejecutando actualización con {SCRIPT_ACTUALIZACION}...")
-    subprocess.run([sys.executable, SCRIPT_ACTUALIZACION], check=True)
+    subprocess.run([sys.executable] + SCRIPT_ACTUALIZACION, check=True)
     print("✅ Actualización completada.")
 
 if __name__ == "__main__":
