@@ -2,7 +2,6 @@ import requests
 from datetime import datetime, timedelta
 
 find_lotery = 'ASTRO'
-fecha_inicio = datetime.strptime("2023-02-01", "%Y-%m-%d")  # Fecha más antigua conocida
 
 def eliminar_duplicados(lista, claves):
     """Elimina duplicados de una lista de diccionarios según las claves indicadas."""
@@ -15,9 +14,12 @@ def eliminar_duplicados(lista, claves):
             resultado_filtrado.append(item)
     return resultado_filtrado
 
-def obtener_resultados_históricos_astro():
+def obtener_resultados_históricos_astro(fecha_inicio=None):
     url_base = "https://api-resultadosloterias.com/api/results/"
     hoy = datetime.today()
+
+    if fecha_inicio is None:
+        fecha_inicio = datetime.strptime("2023-02-01", "%Y-%m-%d")
 
     resultados_astro = []
     dias_totales = (hoy - fecha_inicio).days + 1  # +1 para incluir hoy
