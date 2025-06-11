@@ -1,12 +1,15 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from src.excel.read_excel import obtener_loterias_disponibles
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
 from openpyxl import load_workbook
 import os
+import warnings
+warnings.filterwarnings("ignore")
 
 ARCHIVO_EXCEL = "resultados_astro.xlsx"
 
@@ -18,7 +21,7 @@ def cargar_datos_excel():
     wb = load_workbook(ARCHIVO_EXCEL, read_only=True)
     ws = wb.active
 
-    headers = [cell.value for cell in ws[1]]
+    headers = [cell.value for cell in ws[1] if cell.value is not None]
     print(f"📌 Encabezados encontrados: {headers}")
 
     data = []
@@ -35,7 +38,7 @@ def cargar_datos_excel():
                 result = int(fila['result'])
                 series = str(fila['series'])
 
-                print(f"✔️ Fila válida: Fecha={fecha}, Número={result}, Serie={series}")
+                # print(f"✔️ Fila válida: Fecha={fecha}, Número={result}, Serie={series}")  
 
                 data.append({
                     "fecha": fecha,
@@ -44,9 +47,9 @@ def cargar_datos_excel():
                     "series": series
                 })
             except Exception as e:
-                print(f"❌ Error procesando fila: {fila} - {e}")
+                pass #print(f"❌ Error procesando fila: {fila} - {e}")  
         else:
-            print(f"🔴 Fila inválida: claves faltantes en {fila.keys()}")
+            pass # print(f"🔴 Fila inválida: claves faltantes en {fila.keys()}")  
 
     print(f"✅ Filas cargadas: {len(data)}")
     return pd.DataFrame(data)
@@ -84,7 +87,7 @@ def entrenar_y_predecir(df):
     pred_series = modelo_series.predict(X_test)
 
     print(f"📊 Exactitud (número): {accuracy_score(y_test_result, pred_result):.2f}")
-    print(f"📊 Exactitud (serie): {accuracy_score(y_test_series, pred_series):.2f}")
+    print(f"📊 Exactitud (simbol): {accuracy_score(y_test_series, pred_series):.2f}")
 
     # Predicción para hoy
     hoy = datetime.today()
@@ -100,12 +103,21 @@ def entrenar_y_predecir(df):
 
     print("\n🔮 Predicción para el próximo sorteo:")
     print(f"   🔢 Número: {str(numero_predicho).zfill(4)}")
-    print(f"   🧿 Serie: {str(serie_predicha).zfill(3)}")
+    print(f"   🧿 Simbol: {str(serie_predicha).zfill(3)}")
 
 if __name__ == "__main__":
     df = cargar_datos_excel()
     if not df.empty:
-        df_preparado = preparar_datos(df)
-        entrenar_y_predecir(df_preparado)
+        loterias = obtener_loterias_disponibles()
+        print(f"\n🎯 Loterías detectadas: {loterias}")
+
+        for loteria in loterias:
+            print(f"\n🔮 Predicción para: {loteria}")
+            df_loteria = preparar_datos(df, loteria)
+            if not df_loteria.empty:
+                entrenar_y_predecir(df_loteria)
+            else:
+                print(f"⚠️ No hay datos suficientes para {loteria}")
     else:
         print("⚠️ No se pudo entrenar el modelo.")
+
