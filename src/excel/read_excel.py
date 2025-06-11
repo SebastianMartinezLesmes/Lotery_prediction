@@ -52,6 +52,29 @@ def ejecutar_actualizacion():
     subprocess.run([sys.executable] + SCRIPT_ACTUALIZACION, check=True)
     print("✅ Actualización completada.")
 
+def obtener_loterias_disponibles():
+    if not os.path.exists(ARCHIVO):
+        print("❌ Archivo Excel no encontrado.")
+        return []
+
+    wb = load_workbook(ARCHIVO, read_only=True)
+    ws = wb.active
+
+    headers = [cell.value for cell in ws[1]]
+    loteria_idx = headers.index("lottery") if "lottery" in headers else -1
+
+    if loteria_idx == -1:
+        print("⚠️ No se encontró la columna 'lottery'")
+        return []
+
+    loterias = set()
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[loteria_idx] is not None:
+            loterias.add(row[loteria_idx].strip())
+
+    return sorted(list(loterias))
+
 if __name__ == "__main__":
     ayer = fecha_ayer()
     ultima_fecha = obtener_ultima_fecha_excel()
@@ -64,3 +87,8 @@ if __name__ == "__main__":
         ejecutar_actualizacion()
     else:
         print("✅ Los resultados ya están actualizados.")
+
+    loterias = obtener_loterias_disponibles()
+    print("📋 Loterías disponibles en el Excel:")
+    for lot in loterias:
+        print(f"   - {lot}")
