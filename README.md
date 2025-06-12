@@ -115,8 +115,35 @@ El archivo resultados_X_.xlsx contiene los datos históricos de los resultados d
 
 ---
 
+## 🧠 Funcionamiento del Sistema de Machine Learning
+El archivo prediction.py contiene la lógica de predicción basada en Machine Learning. El flujo general de este módulo es:
+
+1. Carga de Datos:
+Se importan y limpian los datos desde el archivo resultados_astro.xlsx mediante funciones del módulo read_excel.py.
+
+2. Preparación de los Datos:
+Se convierten las secuencias históricas en características útiles, aplicando técnicas de n-gramas (por ejemplo, combinaciones de 2 o 3 resultados previos).
+
+3. Entrenamiento del Modelo:
+Se entrenan dos modelos principales:
+
+- Regresión logística
+- Árboles de decisión (DecisionTreeClassifier)
+
+4. Evaluación del Modelo:
+Se realiza validación cruzada para determinar qué modelo ofrece mejor precisión según los datos históricos.
+
+5. Predicción:
+El sistema genera una predicción del número y símbolo más probable en el próximo sorteo basándose en los patrones detectados.
+
+6. Salida:
+Se imprime o almacena el resultado predicho, acompañado de métricas de confianza y logs.
+
+Este sistema no se basa en azar, sino en la detección de patrones repetitivos que pueden tener alguna correlación estadística, aunque no se garantiza la certeza del resultado.
+
 ## ⚠️ Requisitos
 
 - Python 3.8+
+- pip 
 
 ---
