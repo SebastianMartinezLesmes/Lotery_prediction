@@ -64,7 +64,7 @@ def preparar_datos(df, loteria="ASTRO LUNA"):
     df = df[["dia", "mes", "anio", "dia_semana", "result", "series"]]
     return df
 
-def entrenar_y_predecir(df, min_acc=0.5, max_intentos=30000):
+def entrenar_y_predecir(df, min_acc=0.5, max_intentos=3000):
     X = df[["dia", "mes", "anio", "dia_semana"]]
     y_result = df["result"]
     y_series = df["series"]
@@ -75,6 +75,7 @@ def entrenar_y_predecir(df, min_acc=0.5, max_intentos=30000):
     mejor_modelo_series = None
 
     for intento in range(1, max_intentos + 1):
+        print(f"🔁 Intento {intento}/{max_intentos}", end="\r")
         random_state = np.random.randint(0, 10000)
 
         X_train, X_test, y_train_result, y_test_result = train_test_split(
