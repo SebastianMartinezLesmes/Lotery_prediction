@@ -1,29 +1,38 @@
 # 🎰 Sistema de Predicción de Lotería
+El usuario está desarrollando un sistema automatizado de predicción de lotería utilizando Python. Este sistema incluye:
 
-Este proyecto automatiza el proceso de recolección de datos, predicción y limpieza de cachés para juegos de lotería. Proporciona un registro completo de eventos.
+- Recolección de datos desde archivos Excel y APIs externas.
+- Implementación de modelos de Machine Learning, como regresión logística y árboles de decisión, para la predicción de resultados.
+- Limpieza automática de archivos de caché (__pycache__).
+- Generación y gestión de registros (logs) para el seguimiento del funcionamiento del sistema.
 
 ---
 
 ## 📁 Estructura del Proyecto
 
-```
-loteria/
+---
+LOTTERY_PREDICTION/
 ├── index.py
-├── wm_load.py
+├── README.md
+├── .gitignore
+├── logs/
+│   ├── dependencias.log
+│   └── log_loteria.log
 ├── src/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── API.py 
+│   ├── excel/
+│   │   ├── __init__.py
+│   │   ├── excel.py
+│   │   └── read_excel.py
 │   ├── utils/
+│   │   ├── __init__.py
 │   │   ├── dependencies.py
 │   │   ├── drop_cache.py
 │   │   ├── logger.py
-│   │   └── __init__.py
-│   ├── excel/
-│   │   ├── read_excel.py
-│   │   └── __init__.py
-├── prediction.py
-├── logs/
-│   └── log_loteria.log
+│   │   └── prediction.py
 ```
-
 ---
 
 ## 🚀 Ejecución del Sistema
@@ -33,7 +42,15 @@ loteria/
 ```bash
 python index.py
 ```
+Este comando ejecutará en orden:
 
+1. Instalación automática de dependencias
+
+2. Recolección de datos desde Excel/API
+
+3. Predicción de resultados
+
+4. Limpieza de caché
 ---
 
 ## 🧹 Limpieza de Caché
@@ -61,16 +78,13 @@ src/utils/dependencies.py
 ---
 
 ## 📋 Registro de Logs
+El sistema genera logs detallados para seguimiento y depuración en:
 
-Se genera un registro detallado de cada ejecución en:
-
-```
-logs/log_loteria.log
-```
-
+- Registro principal: logs/log_loteria.log
+- Registro de instalación de dependencias: logs/dependencias.log
 ---
 
-## 🔧 Personalización
+## ⚙️ Personalización de Scripts
 
 Puedes modificar la lista de scripts ejecutados en el archivo:
 
@@ -82,8 +96,17 @@ scripts = [
     ("Predicción", "prediction.py")
 ]
 ```
-
 ---
+
+## 📦 Dependencias
+
+Las dependencias se gestionan automáticamente en: 
+```
+src/utils/dependencies.py
+```
+## 📊 Datos de Entrada
+
+El archivo resultados_X_.xlsx contiene los datos históricos de los resultados de la lotería y funciona como la fuente principal de entrada para el sistema de predicción. Si el archivo no existe, el script exel.py se encarga de generarlo automáticamente y completar su contenido mediante consultas a los registros más antiguos disponibles. 
 
 ## 🧠 Autor / Créditos
 
