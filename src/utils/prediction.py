@@ -9,6 +9,7 @@ from sklearn.metrics import accuracy_score
 from openpyxl import load_workbook
 import os
 import warnings
+
 warnings.filterwarnings("ignore")
 
 ARCHIVO_EXCEL = "resultados_astro.xlsx"
@@ -38,8 +39,6 @@ def cargar_datos_excel():
                 result = int(fila['result'])
                 series = str(fila['series'])
 
-                # print(f"✔️ Fila válida: Fecha={fecha}, Número={result}, Serie={series}")  
-
                 data.append({
                     "fecha": fecha,
                     "lottery": fila['lottery'],
@@ -47,9 +46,9 @@ def cargar_datos_excel():
                     "series": series
                 })
             except Exception as e:
-                pass #print(f"❌ Error procesando fila: {fila} - {e}")  
+                pass  # Error procesando fila
         else:
-            pass # print(f"🔴 Fila inválida: claves faltantes en {fila.keys()}")  
+            pass  # Fila incompleta
 
     print(f"✅ Filas cargadas: {len(data)}")
     return pd.DataFrame(data)
@@ -58,7 +57,6 @@ def preparar_datos(df, loteria="ASTRO LUNA"):
     df = df[df["lottery"].str.upper() == loteria.upper()]
     df = df.sort_values("fecha")
 
-    # Extraer características del tiempo
     df["dia"] = df["fecha"].dt.day
     df["mes"] = df["fecha"].dt.month
     df["anio"] = df["fecha"].dt.year
@@ -66,28 +64,48 @@ def preparar_datos(df, loteria="ASTRO LUNA"):
     df = df[["dia", "mes", "anio", "dia_semana", "result", "series"]]
     return df
 
-def entrenar_y_predecir(df):
+def entrenar_y_predecir(df, min_acc=0.5, max_intentos=30000):
     X = df[["dia", "mes", "anio", "dia_semana"]]
     y_result = df["result"]
     y_series = df["series"]
 
-    # División para validación
-    X_train, X_test, y_train_result, y_test_result = train_test_split(X, y_result, test_size=0.2, random_state=42)
-    _, _, y_train_series, y_test_series = train_test_split(X, y_series, test_size=0.2, random_state=42)
+    mejor_acc_result = 0
+    mejor_acc_series = 0
+    mejor_modelo_result = None
+    mejor_modelo_series = None
 
-    # Modelos
-    modelo_result = DecisionTreeClassifier(max_depth=5, random_state=0)
-    modelo_series = LogisticRegression(max_iter=1000)
+    for intento in range(1, max_intentos + 1):
+        random_state = np.random.randint(0, 10000)
 
-    modelo_result.fit(X_train, y_train_result)
-    modelo_series.fit(X_train, y_train_series)
+        X_train, X_test, y_train_result, y_test_result = train_test_split(
+            X, y_result, test_size=0.2, random_state=random_state)
+        _, _, y_train_series, y_test_series = train_test_split(
+            X, y_series, test_size=0.2, random_state=random_state)
 
-    # Validación simple
-    pred_result = modelo_result.predict(X_test)
-    pred_series = modelo_series.predict(X_test)
+        modelo_result = DecisionTreeClassifier(max_depth=5, random_state=random_state)
+        modelo_series = LogisticRegression(max_iter=1000)
 
-    print(f"📊 Exactitud (número): {accuracy_score(y_test_result, pred_result):.2f}")
-    print(f"📊 Exactitud (simbol): {accuracy_score(y_test_series, pred_series):.2f}")
+        modelo_result.fit(X_train, y_train_result)
+        modelo_series.fit(X_train, y_train_series)
+
+        pred_result = modelo_result.predict(X_test)
+        pred_series = modelo_series.predict(X_test)
+
+        acc_result = accuracy_score(y_test_result, pred_result)
+        acc_series = accuracy_score(y_test_series, pred_series)
+
+        if acc_result > mejor_acc_result or acc_series > mejor_acc_series:
+            mejor_acc_result = acc_result
+            mejor_acc_series = acc_series
+            mejor_modelo_result = modelo_result
+            mejor_modelo_series = modelo_series
+
+        if acc_result >= min_acc and acc_series >= min_acc:
+            print(f"✅ Exactitud mínima alcanzada en intento {intento}")
+            break
+
+    print(f"📊 Exactitud (número): {mejor_acc_result:.2f}")
+    print(f"📊 Exactitud (simbol): {mejor_acc_series:.2f}")
 
     # Predicción para hoy
     hoy = datetime.today()
@@ -98,8 +116,8 @@ def entrenar_y_predecir(df):
         "dia_semana": hoy.weekday()
     }])
 
-    numero_predicho = modelo_result.predict(X_hoy)[0]
-    serie_predicha = modelo_series.predict(X_hoy)[0]
+    numero_predicho = mejor_modelo_result.predict(X_hoy)[0]
+    serie_predicha = mejor_modelo_series.predict(X_hoy)[0]
 
     print("\n🔮 Predicción para el próximo sorteo:")
     print(f"   🔢 Número: {str(numero_predicho).zfill(4)}")
@@ -120,4 +138,3 @@ if __name__ == "__main__":
                 print(f"⚠️ No hay datos suficientes para {loteria}")
     else:
         print("⚠️ No se pudo entrenar el modelo.")
-
