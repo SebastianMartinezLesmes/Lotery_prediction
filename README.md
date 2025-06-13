@@ -10,7 +10,7 @@ El usuario está desarrollando un sistema automatizado de predicción de loterí
 
 ## 📁 Estructura del Proyecto
 
----
+```
 LOTTERY_PREDICTION/
 ├── index.py
 ├── README.md
