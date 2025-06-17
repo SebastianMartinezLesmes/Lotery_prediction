@@ -15,6 +15,7 @@ LOTTERY_PREDICTION/
 ├── index.py
 ├── README.md
 ├── .gitignore
+├── data/
 ├── logs/
 │   ├── dependencias.log
 │   └── log_loteria.log
@@ -32,6 +33,7 @@ LOTTERY_PREDICTION/
 │   │   ├── drop_cache.py
 │   │   ├── logger.py
 │   │   └── prediction.py
+│   │   └── result.py
 ```
 ---
 

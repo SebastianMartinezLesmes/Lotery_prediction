@@ -11,6 +11,9 @@ logs/
 # 📊 Resultados generados por el programa
 resultados_astro.xlsx
 
+# 📊 resultados de la predicción
+results.json
+
 # 🛠 Archivos temporales de entorno o IDE
 *.env
 *.venv
@@ -25,4 +28,3 @@ resultados_astro.xlsx
 .idea/
 .DS_Store
 Thumbs.db
-
