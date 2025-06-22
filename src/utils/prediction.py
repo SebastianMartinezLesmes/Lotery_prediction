@@ -65,7 +65,7 @@ def preparar_datos(df, loteria="ASTRO LUNA"):
     df = df[["dia", "mes", "anio", "dia_semana", "result", "series"]]
     return df
 
-def entrenar_y_predecir(df, min_acc=0.5, max_intentos=300):
+def entrenar_y_predecir(df, min_acc=0.5, max_intentos=3000):
     X = df[["dia", "mes", "anio", "dia_semana"]]
     y_result = df["result"]
     y_series = df["series"]
