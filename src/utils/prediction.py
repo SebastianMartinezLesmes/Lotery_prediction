@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from src.utils.config import ITERATIONS as iter
 from datetime import datetime
 from src.utils.result import guardar_resultado
 from src.excel.read_excel import obtener_loterias_disponibles
@@ -10,10 +11,12 @@ from sklearn.metrics import accuracy_score
 from openpyxl import load_workbook
 import os
 import warnings
+import time
 
 warnings.filterwarnings("ignore")
 
 ARCHIVO_EXCEL = "resultados_astro.xlsx"
+TIEMPOS_LOG = "logs/tiempos.log"
 
 def cargar_datos_excel():
     if not os.path.exists(ARCHIVO_EXCEL):
@@ -65,7 +68,9 @@ def preparar_datos(df, loteria="ASTRO LUNA"):
     df = df[["dia", "mes", "anio", "dia_semana", "result", "series"]]
     return df
 
-def entrenar_y_predecir(df, min_acc=0.5, max_intentos=30000):
+def entrenar_y_predecir(df, loteria="ASTRO LUNA", min_acc=0.5, max_intentos=iter):
+    inicio_tiempo = time.time()
+
     X = df[["dia", "mes", "anio", "dia_semana"]]
     y_result = df["result"]
     y_series = df["series"]
@@ -109,7 +114,6 @@ def entrenar_y_predecir(df, min_acc=0.5, max_intentos=30000):
     print(f"📊 Exactitud (número): {mejor_acc_result:.2f}")
     print(f"📊 Exactitud (simbol): {mejor_acc_series:.2f}")
 
-    # Predicción para hoy
     hoy = datetime.today()
     X_hoy = pd.DataFrame([{
         "dia": hoy.day,
@@ -130,10 +134,18 @@ def entrenar_y_predecir(df, min_acc=0.5, max_intentos=30000):
         "numero": str(numero_predicho).zfill(4),
         "simbolo": str(serie_predicha).zfill(3),
     }
+
     guardar_resultado(resultado, modelo_usado="DecisionTree + LogisticRegression",
         confianza=(mejor_acc_result + mejor_acc_series) / 2)
 
-if __name__ == "__main__":
+    duracion = time.time() - inicio_tiempo
+
+    # Guardar tiempo en archivo de logs
+    os.makedirs("logs", exist_ok=True)
+    with open(TIEMPOS_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{loteria} | Tiempo: {duracion:.2f} segundos | Iteraciones: {intento}\n")
+
+def main():
     df = cargar_datos_excel()
     if not df.empty:
         loterias = obtener_loterias_disponibles()
@@ -143,8 +155,11 @@ if __name__ == "__main__":
             print(f"\n🔮 Predicción para: {loteria}")
             df_loteria = preparar_datos(df, loteria)
             if not df_loteria.empty:
-                entrenar_y_predecir(df_loteria)
+                entrenar_y_predecir(df_loteria, loteria)
             else:
                 print(f"⚠️ No hay datos suficientes para {loteria}")
     else:
         print("⚠️ No se pudo entrenar el modelo.")
+
+if __name__ == "__main__":
+    main()

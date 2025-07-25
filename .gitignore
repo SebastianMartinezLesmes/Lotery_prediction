@@ -12,6 +12,7 @@ logs/
 resultados_astro.xlsx
 
 # 📊 resultados de la predicción
+data
 results.json
 
 # 🛠 Archivos temporales de entorno o IDE
