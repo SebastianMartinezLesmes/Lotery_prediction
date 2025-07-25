@@ -1,7 +1,6 @@
 import requests
 from datetime import datetime, timedelta
-
-find_lotery = 'ASTRO'
+from src.utils.config import FIND_LOTERY  # ← constante importada desde config.py
 
 def eliminar_duplicados(lista, claves):
     """Elimina duplicados de una lista de diccionarios según las claves indicadas."""
@@ -37,7 +36,7 @@ def obtener_resultados_históricos_astro(fecha_inicio=None):
 
             resultados_filtrados = [
                 resultado for resultado in resultados_dia
-                if find_lotery in resultado.get("lottery", "").upper()
+                if FIND_LOTERY in resultado.get("lottery", "").upper()
             ]
 
             resultados_unicos = eliminar_duplicados(
@@ -50,9 +49,9 @@ def obtener_resultados_históricos_astro(fecha_inicio=None):
                     "fecha": fecha_str,
                     "resultados": resultados_unicos
                 })
-                print(f"✅ Resultados ASTRO obtenidos para {fecha_str}")
+                print(f"✅ Resultados {FIND_LOTERY} obtenidos para {fecha_str}")
             else:
-                print(f"❌ No hubo resultados ASTRO para {fecha_str}")
+                print(f"❌ No hubo resultados {FIND_LOTERY} para {fecha_str}")
 
         except requests.exceptions.RequestException as e:
             print(f"⚠️ Error obteniendo resultados para {fecha_str}: {e}")
@@ -65,6 +64,6 @@ if __name__ == "__main__":
     for dia in resultados:
         print(f"\n📅 Fecha: {dia['fecha']}")
         for resultado in dia['resultados']:
-            print(f"🔮 Lotería {find_lotery}:")
+            print(f"🔮 Lotería {FIND_LOTERY}:")
             for clave, valor in resultado.items():
                 print(f"   {clave}: {valor}")
