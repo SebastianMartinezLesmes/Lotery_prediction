@@ -35,7 +35,7 @@ def obtener_ultima_fecha_excel():
                 if isinstance(cell.value, datetime):
                     fechas.append(cell.value.date())
                 elif isinstance(cell.value, str):
-                    fechas.append(datetime.strptime(cell.value, "%Y-%m-%d").date())
+                    fechas.append(datetime.strptime(cell.value, "%d/%m/%Y").date())
             except:
                 continue
 
