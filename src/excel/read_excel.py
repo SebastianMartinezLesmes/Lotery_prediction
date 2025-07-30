@@ -2,9 +2,10 @@ from openpyxl import load_workbook
 from datetime import datetime, timedelta
 import os
 import subprocess
-import sys  # ← importante para sys.executable
+import sys 
+from src.utils.config import CREATE_DOC  
 
-ARCHIVO = "resultados_astro.xlsx"
+ARCHIVO = CREATE_DOC
 SCRIPT_ACTUALIZACION = ["-m", "src.excel.excel"]
 
 def fecha_ayer():

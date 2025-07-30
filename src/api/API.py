@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime, timedelta
 from tqdm import tqdm
-from src.utils.config import FIND_LOTERY, API_URL, FECHA_DEFECTO, CLAVES_UNICAS  # ← constante desde config.py
+from src.utils.config import FIND_LOTERY, API_URL, FECHA_DEFECTO, CLAVES_UNICAS 
 
 def eliminar_duplicados(lista, claves):
     
