@@ -28,3 +28,7 @@ CLAVES_UNICAS = ["lottery", "slug", "date", "result", "series"]
 
 # Number of iterations for the prediction model
 ITERATIONS = 3000
+
+# 📁 File's routers for best models
+MODELO_RESULT_PATH = "models/modelo_result_astro.pkl"
+MODELO_SERIES_PATH = "models/modelo_series_astro.pkl"
