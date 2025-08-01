@@ -3,11 +3,18 @@
 import os
 import sys
 import joblib
+import warnings
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 # from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, classification_report
+# from src.utils.config import CLAVES_UNICAS
+
+warnings.filterwarnings(
+    "ignore",
+    message="The number of unique classes is greater than 50% of the number of samples."
+)
 
 def generar_ruta_modelo(nombre_loteria, tipo):
     nombre_archivo = f"modelo_{tipo}_{nombre_loteria.lower().replace(' ', '_')}.pkl"
@@ -174,23 +181,60 @@ def entrenar_modelos(X, y_result, y_series, min_acc=0.7, max_iter=3000, verbose=
 
 # Agrega esto al final de entrenamiento.py
 if __name__ == "__main__":
-    print("🚀 Ejecutando entrenamiento de prueba con datos sintéticos...\n")
+    print("🚀 Ejecutando entrenamiento con datos reales desde 'resultados_astro.xlsx'...\n")
 
-    from sklearn.datasets import make_classification
+    import pandas as pd
 
-    # Crear datos sintéticos una vez para todas las loterías
-    X, y = make_classification(n_samples=300, n_features=4, n_classes=2, random_state=42)
-    y_result = y
-    y_series = np.random.randint(0, 2, size=len(y))
+    # Ruta absoluta al archivo Excel en la raíz del proyecto
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    ruta_excel = os.path.join(BASE_DIR, "resultados_astro.xlsx")
 
-    loterias = ['astro luna', 'astro sol']
+    if not os.path.exists(ruta_excel):
+        print(f"❌ Archivo no encontrado: {ruta_excel}")
+        sys.exit(1)
+
+    # Leer datos
+    df = pd.read_excel(ruta_excel)
+
+    # Validar columnas requeridas
+    columnas_necesarias = {"fecha", "lottery", "slug", "result", "series"}
+    if not columnas_necesarias.issubset(df.columns):
+        print("❌ El archivo no contiene todas las columnas necesarias:", columnas_necesarias)
+        sys.exit(1)
+
+    # Limpieza y preprocesamiento
+    df = df.dropna(subset=["fecha", "lottery", "result", "series"])
+    df["result"] = df["result"].astype(int)
+    df["fecha"] = pd.to_datetime(df["fecha"], dayfirst=True)
+
+    # Convertir series (signo zodiacal) a categorías numéricas
+    df["series"] = df["series"].astype(str).str.upper().astype("category").cat.codes
+
+    # Extraer features temporales
+    df["dia"] = df["fecha"].dt.day
+    df["mes"] = df["fecha"].dt.month
+    df["anio"] = df["fecha"].dt.year
+
+    df["dia_semana"] = df["fecha"].dt.weekday
+    X = df[["dia", "mes", "anio", "dia_semana"]].values
+    y_result = df["result"].values
+    y_series = df["series"].values
+
+    loterias = df["lottery"].str.lower().unique()
 
     for nombre_loteria in loterias:
         print(f"\n📈 Entrenando modelos para: {nombre_loteria.title()}")
+        df_loteria = df[df["lottery"].str.lower() == nombre_loteria]
+
+        df_loteria["dia_semana"] = df_loteria["fecha"].dt.weekday
+        X_l = df_loteria[["dia", "mes", "anio", "dia_semana"]].values
+        y_r = df_loteria["result"].values
+        y_s = df_loteria["series"].values
+
         entrenar_modelos_por_loteria(
-            X=X,
-            y_result=y_result,
-            y_series=y_series,
+            X=X_l,
+            y_result=y_r,
+            y_series=y_s,
             nombre_loteria=nombre_loteria,
             min_acc=0.7,
             max_iter=1000,
@@ -198,4 +242,3 @@ if __name__ == "__main__":
         )
 
     print("\n\n🏁 Entrenamiento finalizado para todas las loterías.")
-
