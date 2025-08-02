@@ -1,29 +1,47 @@
 # 🎰 Sistema de Predicción de Lotería
+El usuario está desarrollando un sistema automatizado de predicción de lotería utilizando Python. Este sistema incluye:
 
-Este proyecto automatiza el proceso de recolección de datos, predicción y limpieza de cachés para juegos de lotería. Proporciona un registro completo de eventos.
+- Recolección de datos desde archivos Excel y APIs externas.
+- Implementación de modelos de Machine Learning, como regresión logística y árboles de decisión, para la predicción de resultados.
+- Limpieza automática de archivos de caché (__pycache__).
+- Generación y gestión de registros (logs) para el seguimiento del funcionamiento del sistema.
 
 ---
 
 ## 📁 Estructura del Proyecto
 
 ```
-loteria/
+LOTTERY_PREDICTION/
 ├── index.py
-├── wm_load.py
+├── README.md
+├── LICENCE
+├── .gitignore
+├── data/
+│   └── .gitkeep
+├── logs/
+│   └── .gitkeep
+├── models/
+│   └── .gitkeep
+├── logs/
+│   └── .gitkeep
 ├── src/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── API.py 
+│   ├── excel/
+│   │   ├── __init__.py
+│   │   ├── excel.py
+│   │   └── read_excel.py
 │   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config.py
 │   │   ├── dependencies.py
 │   │   ├── drop_cache.py
+│   │   ├── entrenamiento.py
 │   │   ├── logger.py
-│   │   └── __init__.py
-│   ├── excel/
-│   │   ├── read_excel.py
-│   │   └── __init__.py
-├── prediction.py
-├── logs/
-│   └── log_loteria.log
+│   │   └── prediction.py
+│   │   └── result.py
 ```
-
 ---
 
 ## 🚀 Ejecución del Sistema
@@ -33,7 +51,15 @@ loteria/
 ```bash
 python index.py
 ```
+Este comando ejecutará en orden:
 
+1. Instalación automática de dependencias
+
+2. Recolección de datos desde Excel/API
+
+3. Predicción de resultados
+
+4. Limpieza de caché
 ---
 
 ## 🧹 Limpieza de Caché
@@ -61,16 +87,13 @@ src/utils/dependencies.py
 ---
 
 ## 📋 Registro de Logs
+El sistema genera logs detallados para seguimiento y depuración en:
 
-Se genera un registro detallado de cada ejecución en:
-
-```
-logs/log_loteria.log
-```
-
+- Registro principal: logs/log_loteria.log
+- Registro de instalación de dependencias: logs/dependencias.log
 ---
 
-## 🔧 Personalización
+## ⚙️ Personalización de Scripts
 
 Puedes modificar la lista de scripts ejecutados en el archivo:
 
@@ -82,8 +105,17 @@ scripts = [
     ("Predicción", "prediction.py")
 ]
 ```
-
 ---
+
+## 📦 Dependencias
+
+Las dependencias se gestionan automáticamente en: 
+```
+src/utils/dependencies.py
+```
+## 📊 Datos de Entrada
+
+El archivo resultados_X_.xlsx contiene los datos históricos de los resultados de la lotería y funciona como la fuente principal de entrada para el sistema de predicción. Si el archivo no existe, el script exel.py se encarga de generarlo automáticamente y completar su contenido mediante consultas a los registros más antiguos disponibles. 
 
 ## 🧠 Autor / Créditos
 
@@ -92,8 +124,35 @@ scripts = [
 
 ---
 
+## 🧠 Funcionamiento del Sistema de Machine Learning
+El archivo prediction.py contiene la lógica de predicción basada en Machine Learning. El flujo general de este módulo es:
+
+1. Carga de Datos:
+Se importan y limpian los datos desde el archivo resultados_astro.xlsx mediante funciones del módulo read_excel.py.
+
+2. Preparación de los Datos:
+Se convierten las secuencias históricas en características útiles, aplicando técnicas de n-gramas (por ejemplo, combinaciones de 2 o 3 resultados previos).
+
+3. Entrenamiento del Modelo:
+Se entrenan dos modelos principales:
+
+- Regresión logística
+- Árboles de decisión (DecisionTreeClassifier)
+
+4. Evaluación del Modelo:
+Se realiza validación cruzada para determinar qué modelo ofrece mejor precisión según los datos históricos.
+
+5. Predicción:
+El sistema genera una predicción del número y símbolo más probable en el próximo sorteo basándose en los patrones detectados.
+
+6. Salida:
+Se imprime o almacena el resultado predicho, acompañado de métricas de confianza y logs.
+
+Este sistema no se basa en azar, sino en la detección de patrones repetitivos que pueden tener alguna correlación estadística, aunque no se garantiza la certeza del resultado.
+
 ## ⚠️ Requisitos
 
 - Python 3.8+
+- pip 
 
 ---

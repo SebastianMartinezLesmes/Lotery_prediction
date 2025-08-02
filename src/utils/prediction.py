@@ -1,18 +1,20 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from src.utils.result import guardar_resultado
 from src.excel.read_excel import obtener_loterias_disponibles
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score
+from src.utils.entrenamiento import entrenar_modelos_por_loteria
 from openpyxl import load_workbook
 import os
 import warnings
+import joblib
+import time
 
 warnings.filterwarnings("ignore")
 
 ARCHIVO_EXCEL = "resultados_astro.xlsx"
+TIEMPOS_LOG = "logs/tiempos.log"
+CARPETA_MODELOS = "models"
 
 def cargar_datos_excel():
     if not os.path.exists(ARCHIVO_EXCEL):
@@ -21,21 +23,16 @@ def cargar_datos_excel():
 
     wb = load_workbook(ARCHIVO_EXCEL, read_only=True)
     ws = wb.active
-
     headers = [cell.value for cell in ws[1] if cell.value is not None]
-    print(f"📌 Encabezados encontrados: {headers}")
 
     data = []
-
     for row in ws.iter_rows(min_row=2, values_only=True):
         fila = dict(zip(headers, row))
-
         if all(k in fila and fila[k] is not None for k in ['fecha', 'lottery', 'result', 'series']):
             try:
                 fecha = fila['fecha']
                 if isinstance(fecha, str):
                     fecha = datetime.strptime(fecha, "%Y-%m-%d")
-
                 result = int(fila['result'])
                 series = str(fila['series'])
 
@@ -45,70 +42,36 @@ def cargar_datos_excel():
                     "result": result,
                     "series": series
                 })
-            except Exception as e:
-                pass  # Error procesando fila
-        else:
-            pass  # Fila incompleta
-
-    print(f"✅ Filas cargadas: {len(data)}")
+            except Exception:
+                pass
     return pd.DataFrame(data)
 
-def preparar_datos(df, loteria="ASTRO LUNA"):
+def preparar_datos(df, loteria):
     df = df[df["lottery"].str.upper() == loteria.upper()]
     df = df.sort_values("fecha")
-
     df["dia"] = df["fecha"].dt.day
     df["mes"] = df["fecha"].dt.month
     df["anio"] = df["fecha"].dt.year
     df["dia_semana"] = df["fecha"].dt.weekday
-    df = df[["dia", "mes", "anio", "dia_semana", "result", "series"]]
-    return df
+    return df[["dia", "mes", "anio", "dia_semana", "result", "series"]]
 
-def entrenar_y_predecir(df, min_acc=0.5, max_intentos=3000):
+def predecir_para_loteria(df, loteria):
+    inicio = time.time()
     X = df[["dia", "mes", "anio", "dia_semana"]]
     y_result = df["result"]
     y_series = df["series"]
 
-    mejor_acc_result = 0
-    mejor_acc_series = 0
-    mejor_modelo_result = None
-    mejor_modelo_series = None
+    nombre_archivo = loteria.replace(" ", "_").lower()
+    modelo_result_path = os.path.join(CARPETA_MODELOS, f"modelo_result_{nombre_archivo}.pkl")
+    modelo_series_path = os.path.join(CARPETA_MODELOS, f"modelo_series_{nombre_archivo}.pkl")
 
-    for intento in range(1, max_intentos + 1):
-        print(f"🔁 Intento {intento}/{max_intentos}", end="\r")
-        random_state = np.random.randint(0, 10000)
+    if not os.path.exists(modelo_result_path) or not os.path.exists(modelo_series_path):
+        print(f"📚 Modelos no encontrados para {loteria}, entrenando...")
+        entrenar_modelos_por_loteria(X, y_result, y_series, loteria, min_acc=0.7, max_iter=3000, verbose=True)
 
-        X_train, X_test, y_train_result, y_test_result = train_test_split(
-            X, y_result, test_size=0.2, random_state=random_state)
-        _, _, y_train_series, y_test_series = train_test_split(
-            X, y_series, test_size=0.2, random_state=random_state)
+    modelo_result = joblib.load(modelo_result_path)
+    modelo_series = joblib.load(modelo_series_path)
 
-        modelo_result = DecisionTreeClassifier(max_depth=5, random_state=random_state)
-        modelo_series = LogisticRegression(max_iter=1000)
-
-        modelo_result.fit(X_train, y_train_result)
-        modelo_series.fit(X_train, y_train_series)
-
-        pred_result = modelo_result.predict(X_test)
-        pred_series = modelo_series.predict(X_test)
-
-        acc_result = accuracy_score(y_test_result, pred_result)
-        acc_series = accuracy_score(y_test_series, pred_series)
-
-        if acc_result > mejor_acc_result or acc_series > mejor_acc_series:
-            mejor_acc_result = acc_result
-            mejor_acc_series = acc_series
-            mejor_modelo_result = modelo_result
-            mejor_modelo_series = modelo_series
-
-        if acc_result >= min_acc and acc_series >= min_acc:
-            print(f"✅ Exactitud mínima alcanzada en intento {intento}")
-            break
-
-    print(f"📊 Exactitud (número): {mejor_acc_result:.2f}")
-    print(f"📊 Exactitud (simbol): {mejor_acc_series:.2f}")
-
-    # Predicción para hoy
     hoy = datetime.today()
     X_hoy = pd.DataFrame([{
         "dia": hoy.day,
@@ -117,25 +80,40 @@ def entrenar_y_predecir(df, min_acc=0.5, max_intentos=3000):
         "dia_semana": hoy.weekday()
     }])
 
-    numero_predicho = mejor_modelo_result.predict(X_hoy)[0]
-    serie_predicha = mejor_modelo_series.predict(X_hoy)[0]
+    numero = modelo_result.predict(X_hoy)[0]
+    simbolo = modelo_series.predict(X_hoy)[0]
 
-    print("\n🔮 Predicción para el próximo sorteo:")
-    print(f"   🔢 Número: {str(numero_predicho).zfill(4)}")
-    print(f"   🧿 Simbol: {str(serie_predicha).zfill(3)}")
+    print(f"\n🎰 {loteria}:")
+    print(f"   🔢 Número: {str(numero).zfill(4)}")
+    print(f"   🧿 Símbolo: {str(simbolo).zfill(3)}")
+
+    guardar_resultado({
+        "loteria": loteria,
+        "numero": str(numero).zfill(4),
+        "simbolo": str(simbolo).zfill(3)
+    }, modelo_usado=f"modelo_result_{nombre_archivo}.pkl", confianza=None)
+
+    duracion = time.time() - inicio
+    os.makedirs("logs", exist_ok=True)
+    with open(TIEMPOS_LOG, "a", encoding="utf-8") as f:
+        f.write(f"{loteria} | Tiempo: {duracion:.2f} s | Predicción completada\n")
+
+def main():
+    df = cargar_datos_excel()
+    if df.empty:
+        print("⚠️ No se pudieron cargar datos del archivo.")
+        return
+
+    loterias = obtener_loterias_disponibles()
+    print(f"\n🎯 Loterías detectadas: {loterias}")
+
+    for loteria in loterias:
+        print(f"\n🔮 Procesando: {loteria}")
+        df_loteria = preparar_datos(df, loteria)
+        if not df_loteria.empty:
+            predecir_para_loteria(df_loteria, loteria)
+        else:
+            print(f"⚠️ No hay suficientes datos para {loteria}")
 
 if __name__ == "__main__":
-    df = cargar_datos_excel()
-    if not df.empty:
-        loterias = obtener_loterias_disponibles()
-        print(f"\n🎯 Loterías detectadas: {loterias}")
-
-        for loteria in loterias:
-            print(f"\n🔮 Predicción para: {loteria}")
-            df_loteria = preparar_datos(df, loteria)
-            if not df_loteria.empty:
-                entrenar_y_predecir(df_loteria)
-            else:
-                print(f"⚠️ No hay datos suficientes para {loteria}")
-    else:
-        print("⚠️ No se pudo entrenar el modelo.")
+    main()

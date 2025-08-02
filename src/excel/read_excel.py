@@ -2,9 +2,10 @@ from openpyxl import load_workbook
 from datetime import datetime, timedelta
 import os
 import subprocess
-import sys  # ← importante para sys.executable
+import sys 
+from src.utils.config import CREATE_DOC  
 
-ARCHIVO = "resultados_astro.xlsx"
+ARCHIVO = CREATE_DOC
 SCRIPT_ACTUALIZACION = ["-m", "src.excel.excel"]
 
 def fecha_ayer():
@@ -35,7 +36,7 @@ def obtener_ultima_fecha_excel():
                 if isinstance(cell.value, datetime):
                     fechas.append(cell.value.date())
                 elif isinstance(cell.value, str):
-                    fechas.append(datetime.strptime(cell.value, "%Y-%m-%d").date())
+                    fechas.append(datetime.strptime(cell.value, "%d/%m/%Y").date())
             except:
                 continue
 
