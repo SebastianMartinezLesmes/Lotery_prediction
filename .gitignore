@@ -5,11 +5,17 @@ __pycache__
 *.pyo
 
 # 📝 Logs de ejecución
-logs/
 *.log
 
 # 📊 Resultados generados por el programa
 resultados_astro.xlsx
+
+# 📊 resultados de la predicción
+results.json
+
+# 📊 modelos de prediction
+/models/*
+!/models/.gitkeep
 
 # 🛠 Archivos temporales de entorno o IDE
 *.env
@@ -25,4 +31,3 @@ resultados_astro.xlsx
 .idea/
 .DS_Store
 Thumbs.db
-

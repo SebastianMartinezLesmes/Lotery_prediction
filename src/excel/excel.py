@@ -3,8 +3,9 @@ from openpyxl import Workbook, load_workbook
 from datetime import datetime, timedelta
 from src.api.API import obtener_resultados_históricos_astro
 from src.excel.read_excel import obtener_ultima_fecha_excel
+from src.utils.config import CREATE_DOC
 
-def guardar_resultados_en_excel(nombre_archivo="resultados_astro.xlsx"):
+def guardar_resultados_en_excel(nombre_archivo=CREATE_DOC):
     # Obtener la última fecha registrada en el archivo
     ultima_fecha = obtener_ultima_fecha_excel()
     if ultima_fecha:
