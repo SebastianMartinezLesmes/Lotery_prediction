@@ -1,10 +1,14 @@
 # 🎰 Sistema de Predicción de Lotería
-El usuario está desarrollando un sistema automatizado de predicción de lotería utilizando Python. Este sistema incluye:
+
+Este sistema automatizado desarrollado en Python permite la predicción de resultados de lotería mediante Machine Learning. Incluye:
 
 - Recolección de datos desde archivos Excel y APIs externas.
-- Implementación de modelos de Machine Learning, como regresión logística y árboles de decisión, para la predicción de resultados.
-- Limpieza automática de archivos de caché (__pycache__).
-- Generación y gestión de registros (logs) para el seguimiento del funcionamiento del sistema.
+- Entrenamiento y perfeccionamiento de modelos por cada lotería individual.
+- Uso de modelos de regresión logística y árboles de decisión.
+- Entrenamiento dividido en predicción por resultados (`result`) y por secuencias (`series`).
+- Gestión automática de modelos en formato `.pkl`.
+- Limpieza automática de archivos de caché (`__pycache__`).
+- Registro detallado de logs para diagnóstico y auditoría.
 
 ---
 
@@ -17,13 +21,13 @@ LOTTERY_PREDICTION/
 ├── LICENCE
 ├── .gitignore
 ├── data/
-│   └── .gitkeep
+│   └── resultados_*.xlsx
 ├── logs/
-│   └── .gitkeep
+│   ├── dependencias.log
+│   └── log_loteria.log
 ├── models/
-│   └── .gitkeep
-├── logs/
-│   └── .gitkeep
+│   ├── modelo_result_{loteria}.pkl
+│   └── modelo_series_{loteria}.pkl
 ├── src/
 │   ├── api/
 │   │   ├── __init__.py
@@ -39,34 +43,88 @@ LOTTERY_PREDICTION/
 │   │   ├── drop_cache.py
 │   │   ├── entrenamiento.py
 │   │   ├── logger.py
-│   │   └── prediction.py
-│   │   └── result.py
+│   │   ├── prediction.py
+│   │   ├── result.py
+│   │   └── zodiaco.py
 ```
+
 ---
 
 ## 🚀 Ejecución del Sistema
 
-### Opción 1: Modo estándar (con logs)
+### Opción 1: Modo completo (automatizado)
 
 ```bash
 python index.py
 ```
-Este comando ejecutará en orden:
 
-1. Instalación automática de dependencias
+Este comando ejecuta:
 
-2. Recolección de datos desde Excel/API
+1. Instalación de dependencias.
+2. Recolección o actualización de datos desde Excel/API.
+3. Predicción de resultados usando modelos previamente entrenados.
+4. Limpieza de archivos de caché.
 
-3. Predicción de resultados
+### Opción 2: Entrenamiento directo de modelos
 
-4. Limpieza de caché
+```bash
+python src/utils/entrenamiento.py
+```
+
+Esto buscará los modelos `.pkl` previamente creados por lotería. Si existen, los perfeccionará. Si no se encuentra ningún modelo previo, se mostrará un mensaje:  
+**"Loterías no encontradas"**
+
+---
+
+## 🧠 Funcionamiento del Sistema de Machine Learning
+
+El flujo general de predicción y entrenamiento incluye:
+
+1. **Carga de Datos:**  
+   Desde `resultados_*.xlsx`, usando `read_excel.py`.
+
+2. **Preprocesamiento:**  
+   Generación de secuencias n-gram para series y codificación para predicción de resultados.
+
+3. **Entrenamiento de Modelos:**  
+   Se crean dos modelos independientes por cada lotería:
+
+   - `modelo_result_{loteria}.pkl`: para predecir el número y símbolo ganador.
+   - `modelo_series_{loteria}.pkl`: para aprender secuencias históricas usando n-gramas.
+
+4. **Evaluación:**  
+   Se comparan modelos mediante validación cruzada y se guarda el mejor en la carpeta `models/`.
+
+5. **Predicción:**  
+   Basada en patrones aprendidos para cada lotería de forma individual.
+
+---
+
+## 📊 Datos de Entrada
+
+Los datos provienen de archivos como:
+
+```
+data/resultados_astro.xlsx
+```
+
+El sistema los crea automáticamente si no existen, usando fuentes disponibles.
+
+---
+
+## 📋 Registro de Logs
+
+Todos los eventos se registran en:
+
+- `logs/dependencias.log` — instalación de paquetes
+- `logs/log_loteria.log` — seguimiento del sistema
+- `logs/tiempos.log` — Registro de tiempos de ejecusion
+
 ---
 
 ## 🧹 Limpieza de Caché
 
-Al final de la ejecución, el sistema ejecuta un módulo para eliminar todas las carpetas `__pycache__` del proyecto.
-
-También puedes ejecutarlo de forma independiente:
+Automática al final del flujo completo. También puedes ejecutarla manualmente:
 
 ```bash
 python -m src.utils.drop_cache
@@ -76,9 +134,7 @@ python -m src.utils.drop_cache
 
 ## 📦 Dependencias
 
-El sistema carga e instala automáticamente las dependencias necesarias en el primer paso (`dependencies.py`).
-
-Puedes revisar o modificar las dependencias requeridas en:
+Las dependencias necesarias se cargan automáticamente desde:
 
 ```
 src/utils/dependencies.py
@@ -86,73 +142,31 @@ src/utils/dependencies.py
 
 ---
 
-## 📋 Registro de Logs
-El sistema genera logs detallados para seguimiento y depuración en:
+## ⚙️ Orden de Ejecución de Scripts
 
-- Registro principal: logs/log_loteria.log
-- Registro de instalación de dependencias: logs/dependencias.log
----
-
-## ⚙️ Personalización de Scripts
-
-Puedes modificar la lista de scripts ejecutados en el archivo:
+Puedes modificar la ejecución del sistema en `index.py`:
 
 ```python
-# index.py 
 scripts = [
     ("Dependencias", "src/utils/dependencies.py"),
     ("Recolección de Datos", "src/excel/read_excel.py"),
-    ("Predicción", "prediction.py")
+    ("Predicción", "src/utils/prediction.py")
 ]
 ```
+
 ---
 
-## 📦 Dependencias
+## ✅ Requisitos
 
-Las dependencias se gestionan automáticamente en: 
-```
-src/utils/dependencies.py
-```
-## 📊 Datos de Entrada
+- Python 3.8+
+- pip
+- pandas, numpy, openpyxl, scikit-learn, entre otros
 
-El archivo resultados_X_.xlsx contiene los datos históricos de los resultados de la lotería y funciona como la fuente principal de entrada para el sistema de predicción. Si el archivo no existe, el script exel.py se encarga de generarlo automáticamente y completar su contenido mediante consultas a los registros más antiguos disponibles. 
+---
 
 ## 🧠 Autor / Créditos
 
-- Desarrollado con ❤️ para automatizar predicciones de lotería.
-- Incluye limpieza de cachés, logs, manejo de errores y progresos visuales.
-
----
-
-## 🧠 Funcionamiento del Sistema de Machine Learning
-El archivo prediction.py contiene la lógica de predicción basada en Machine Learning. El flujo general de este módulo es:
-
-1. Carga de Datos:
-Se importan y limpian los datos desde el archivo resultados_astro.xlsx mediante funciones del módulo read_excel.py.
-
-2. Preparación de los Datos:
-Se convierten las secuencias históricas en características útiles, aplicando técnicas de n-gramas (por ejemplo, combinaciones de 2 o 3 resultados previos).
-
-3. Entrenamiento del Modelo:
-Se entrenan dos modelos principales:
-
-- Regresión logística
-- Árboles de decisión (DecisionTreeClassifier)
-
-4. Evaluación del Modelo:
-Se realiza validación cruzada para determinar qué modelo ofrece mejor precisión según los datos históricos.
-
-5. Predicción:
-El sistema genera una predicción del número y símbolo más probable en el próximo sorteo basándose en los patrones detectados.
-
-6. Salida:
-Se imprime o almacena el resultado predicho, acompañado de métricas de confianza y logs.
-
-Este sistema no se basa en azar, sino en la detección de patrones repetitivos que pueden tener alguna correlación estadística, aunque no se garantiza la certeza del resultado.
-
-## ⚠️ Requisitos
-
-- Python 3.8+
-- pip 
+Proyecto desarrollado por **Juan Sebastian Martinez Lesmes**  
+Implementando técnicas de Machine Learning y procesamiento automatizado de datos para la predicción de resultados en el sector de juegos de azar y predicción de resultados.
 
 ---
