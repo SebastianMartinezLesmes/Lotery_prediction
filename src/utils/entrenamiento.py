@@ -237,7 +237,7 @@ if __name__ == "__main__":
             y_series=y_s,
             nombre_loteria=nombre_loteria,
             min_acc=0.7,
-            max_iter=1000,
+            max_iter=5000,
             verbose=True
         )
 
