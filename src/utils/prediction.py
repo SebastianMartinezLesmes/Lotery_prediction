@@ -4,6 +4,7 @@ from datetime import datetime
 from src.utils.result import guardar_resultado
 from src.excel.read_excel import obtener_loterias_disponibles
 from src.utils.entrenamiento import entrenar_modelos_por_loteria
+from src.utils.zodiaco import obtener_zodiaco
 from openpyxl import load_workbook
 import os
 import warnings
@@ -81,11 +82,13 @@ def predecir_para_loteria(df, loteria):
     }])
 
     numero = modelo_result.predict(X_hoy)[0]
-    simbolo = modelo_series.predict(X_hoy)[0]
+    simbolo_codificado = modelo_series.predict(X_hoy)[0]
+    simbolo = obtener_zodiaco(simbolo_codificado)
+
 
     print(f"\n🎰 {loteria}:")
     print(f"   🔢 Número: {str(numero).zfill(4)}")
-    print(f"   🧿 Símbolo: {str(simbolo).zfill(3)}")
+    print(f"   🧿 Símbolo: {simbolo}")
 
     guardar_resultado({
         "loteria": loteria,
