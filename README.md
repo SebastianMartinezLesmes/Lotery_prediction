@@ -44,7 +44,8 @@ LOTTERY_PREDICTION/
 │   │   ├── entrenamiento.py
 │   │   ├── logger.py
 │   │   ├── prediction.py
-│   │   └── result.py
+│   │   ├── result.py
+│   │   └── zodiaco.py
 ```
 
 ---
@@ -141,7 +142,7 @@ src/utils/dependencies.py
 
 ---
 
-## ⚙️ Personalización de Scripts
+## ⚙️ Orden de Ejecución de Scripts
 
 Puedes modificar la ejecución del sistema en `index.py`:
 
