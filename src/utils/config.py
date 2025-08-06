@@ -32,3 +32,11 @@ ITERATIONS = 3000
 # 📁 File's routers for best models
 MODELO_RESULT_PATH = "models/modelo_result_astro.pkl"
 MODELO_SERIES_PATH = "models/modelo_series_astro.pkl"
+
+# -----------------------------------
+# 📂 Prediction.py
+# -----------------------------------
+
+ARCHIVO_EXCEL = CREATE_DOC
+TIEMPOS_LOG = "logs/tiempos.log"
+CARPETA_MODELOS = "models"

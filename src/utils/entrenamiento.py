@@ -1,5 +1,3 @@
-# utils/entrenamiento.py
-
 import os
 import sys
 import joblib
@@ -9,7 +7,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 # from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, classification_report
-# from src.utils.config import CLAVES_UNICAS
 
 warnings.filterwarnings(
     "ignore",
@@ -23,7 +20,6 @@ def generar_ruta_modelo(nombre_loteria, tipo):
     os.makedirs(os.path.dirname(ruta_modelo), exist_ok=True)
 
     return ruta_modelo
-
 
 def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=0.7, max_iter=3000, verbose=False):
     modelo_result_path = generar_ruta_modelo(nombre_loteria, "result")
@@ -115,6 +111,9 @@ def entrenar_modelos(X, y_result, y_series, min_acc=0.7, max_iter=3000, verbose=
                 if verbose:
                     print(f"⚠️ Error al cargar modelo_series: {e}")
 
+    mejor_acc_result_anterior = mejor_acc_result
+    mejor_acc_series_anterior = mejor_acc_series
+
     for intento in range(1, max_iter + 1):
         random_state = np.random.randint(0, 10000)
 
@@ -170,6 +169,13 @@ def entrenar_modelos(X, y_result, y_series, min_acc=0.7, max_iter=3000, verbose=
         if mejor_modelo_series:
             print(classification_report(y_test_series, mejor_modelo_series.predict(X_test)))
 
+        # 👇 Agrega esto después del reporte
+        print("\n🔎 Comparación de mejoras:")
+        if modelo_result_path and os.path.exists(modelo_result_path):
+            print(f"   Result: anterior={mejor_acc_result_anterior:.4f} vs nuevo={mejor_acc_result:.4f} → {'✅ Mejorado' if mejor_acc_result > mejor_acc_result_anterior else '❌ Sin mejora'}")
+        if modelo_series_path and os.path.exists(modelo_series_path):
+            print(f"   Series: anterior={mejor_acc_series_anterior:.4f} vs nuevo={mejor_acc_series:.4f} → {'✅ Mejorado' if mejor_acc_series > mejor_acc_series_anterior else '❌ Sin mejora'}")
+
     if save_models:
         os.makedirs(os.path.dirname(modelo_result_path), exist_ok=True)
         if mejor_modelo_result:
@@ -179,7 +185,6 @@ def entrenar_modelos(X, y_result, y_series, min_acc=0.7, max_iter=3000, verbose=
 
     return mejor_modelo_result, mejor_modelo_series, mejor_acc_result, mejor_acc_series, intento, history
 
-# Agrega esto al final de entrenamiento.py
 if __name__ == "__main__":
     print("🚀 Ejecutando entrenamiento con datos reales desde 'resultados_astro.xlsx'...\n")
 

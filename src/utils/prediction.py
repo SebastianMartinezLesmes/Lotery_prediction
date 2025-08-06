@@ -1,21 +1,17 @@
-import pandas as pd
-import numpy as np
-from datetime import datetime
-from src.utils.result import guardar_resultado
-from src.excel.read_excel import obtener_loterias_disponibles
-from src.utils.entrenamiento import entrenar_modelos_por_loteria
-from src.utils.zodiaco import obtener_zodiaco
-from openpyxl import load_workbook
 import os
-import warnings
-import joblib
 import time
+import warnings
+from datetime import datetime
+from openpyxl import load_workbook
+import pandas as pd
+import joblib
+from src.utils.config import ARCHIVO_EXCEL, TIEMPOS_LOG, CARPETA_MODELOS
+from src.excel.read_excel import obtener_loterias_disponibles
+from src.utils.result import guardar_resultado
+from src.utils.zodiaco import obtener_zodiaco
+from src.utils.entrenamiento import entrenar_modelos_por_loteria
 
 warnings.filterwarnings("ignore")
-
-ARCHIVO_EXCEL = "resultados_astro.xlsx"
-TIEMPOS_LOG = "logs/tiempos.log"
-CARPETA_MODELOS = "models"
 
 def cargar_datos_excel():
     if not os.path.exists(ARCHIVO_EXCEL):
