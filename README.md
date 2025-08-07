@@ -68,7 +68,7 @@ Este comando ejecuta:
 ### Opción 2: Entrenamiento directo de modelos
 
 ```bash
-python src/utils/entrenamiento.py
+python src/utils/training.py
 ```
 
 Esto buscará los modelos `.pkl` previamente creados por lotería. Si existen, los perfeccionará. Si no se encuentra ningún modelo previo, se mostrará un mensaje:  
