@@ -41,7 +41,7 @@ LOTTERY_PREDICTION/
 │   │   ├── config.py
 │   │   ├── dependencies.py
 │   │   ├── drop_cache.py
-│   │   ├── entrenamiento.py
+│   │   ├── training.py
 │   │   ├── logger.py
 │   │   ├── prediction.py
 │   │   ├── result.py

@@ -9,7 +9,7 @@ from src.utils.config import ARCHIVO_EXCEL, TIEMPOS_LOG, CARPETA_MODELOS
 from src.excel.read_excel import obtener_loterias_disponibles
 from src.utils.result import guardar_resultado
 from src.utils.zodiaco import obtener_zodiaco
-from src.utils.entrenamiento import entrenar_modelos_por_loteria
+from src.utils.training import entrenar_modelos_por_loteria
 
 warnings.filterwarnings("ignore")
 
