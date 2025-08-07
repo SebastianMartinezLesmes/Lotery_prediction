@@ -3,6 +3,7 @@ import sys
 import joblib
 import warnings
 import numpy as np
+from src.utils.config import ITERATIONS, MIN_ACCURACY 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 # from sklearn.linear_model import LogisticRegression
@@ -21,7 +22,7 @@ def generar_ruta_modelo(nombre_loteria, tipo):
 
     return ruta_modelo
 
-def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=0.7, max_iter=3000, verbose=False):
+def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=MIN_ACCURACY , max_iter=ITERATIONS, verbose=False):
     modelo_result_path = generar_ruta_modelo(nombre_loteria, "result")
     modelo_series_path = generar_ruta_modelo(nombre_loteria, "series")
 
@@ -68,7 +69,7 @@ def entrenar_modelo_series(X_train, y_train):
     modelo.fit(X_train, y_train)
     return modelo
 
-def entrenar_modelos(X, y_result, y_series, min_acc=0.7, max_iter=3000, verbose=False,
+def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITERATIONS, verbose=False,
                      save_models=True, modelo_result_path=None, modelo_series_path=None):
     mejor_acc_result = 0
     mejor_acc_series = 0
@@ -241,8 +242,8 @@ if __name__ == "__main__":
             y_result=y_r,
             y_series=y_s,
             nombre_loteria=nombre_loteria,
-            min_acc=0.7,
-            max_iter=5000,
+            min_acc=MIN_ACCURACY ,
+            max_iter=ITERATIONS,
             verbose=True
         )
 
