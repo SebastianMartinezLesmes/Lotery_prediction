@@ -3,11 +3,13 @@ import sys
 import joblib
 import warnings
 import numpy as np
-from src.utils.config import ITERATIONS, MIN_ACCURACY 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 # from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, classification_report
+
+ITERATIONS = 8000
+MIN_ACCURACY = 0.7
 
 warnings.filterwarnings(
     "ignore",
@@ -112,9 +114,6 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITER
                 if verbose:
                     print(f"⚠️ Error al cargar modelo_series: {e}")
 
-    mejor_acc_result_anterior = mejor_acc_result
-    mejor_acc_series_anterior = mejor_acc_series
-
     for intento in range(1, max_iter + 1):
         random_state = np.random.randint(0, 10000)
 
@@ -160,6 +159,9 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITER
             if verbose:
                 print(f"\n✔️ Umbral alcanzado en intento {intento}")
             break
+
+    mejor_acc_result_anterior = mejor_acc_result
+    mejor_acc_series_anterior = mejor_acc_series
 
     if verbose:
         print("\n\n🔍 Reporte Final del Mejor Modelo Result:")
