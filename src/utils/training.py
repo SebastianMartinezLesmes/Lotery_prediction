@@ -5,16 +5,33 @@ import warnings
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-# from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 
-ITERATIONS = 8000
+ITERATIONS = 100
 MIN_ACCURACY = 0.7
 
 warnings.filterwarnings(
     "ignore",
     message="The number of unique classes is greater than 50% of the number of samples."
 )
+
+def evaluar_y_reportar(modelo, X_test, y_test, nombre_modelo, verbose=True):
+    """Evalúa un modelo y muestra métricas de precisión y F1."""
+    if modelo is None:
+        print(f"⚠️ No hay modelo entrenado para {nombre_modelo}.")
+        return None, None
+
+    pred = modelo.predict(X_test)
+    acc = accuracy_score(y_test, pred)
+    f1 = f1_score(y_test, pred, average='macro')
+
+    if verbose:
+        print(f"\n🔍 Reporte Final del Mejor Modelo {nombre_modelo}:")
+        print(f"   - Precisión: {acc:.4f}")
+        print(f"   - F1-Score: {f1:.4f}")
+        print(classification_report(y_test, pred))
+
+    return acc, f1
 
 def generar_ruta_modelo(nombre_loteria, tipo):
     nombre_archivo = f"modelo_{tipo}_{nombre_loteria.lower().replace(' ', '_')}.pkl"
@@ -32,7 +49,7 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
         print(f"📁 Guardando modelos en:\n- {modelo_result_path}\n- {modelo_series_path}")
 
     # Entrenar los modelos con rutas específicas para esta lotería
-    modelo_result, modelo_series, acc_result, acc_series, intento, history = entrenar_modelos(
+    mejor_modelo_result, mejor_modelo_series, acc_result, acc_series, intentos, history = entrenar_modelos(
         X=X,
         y_result=y_result,
         y_series=y_series,
@@ -71,8 +88,9 @@ def entrenar_modelo_series(X_train, y_train):
     modelo.fit(X_train, y_train)
     return modelo
 
-def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITERATIONS, verbose=False,
+def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERATIONS, verbose=False,
                      save_models=True, modelo_result_path=None, modelo_series_path=None):
+
     mejor_acc_result = 0
     mejor_acc_series = 0
     mejor_modelo_result = None
@@ -114,6 +132,7 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITER
                 if verbose:
                     print(f"⚠️ Error al cargar modelo_series: {e}")
 
+    # Iterar entrenamientos
     for intento in range(1, max_iter + 1):
         random_state = np.random.randint(0, 10000)
 
@@ -125,14 +144,8 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITER
         modelo_result = entrenar_modelo_result(X_train, y_train_result, random_state)
         modelo_series = entrenar_modelo_series(X_train, y_train_series)
 
-        pred_result = modelo_result.predict(X_test)
-        pred_series = modelo_series.predict(X_test)
-
-        acc_result = accuracy_score(y_test_result, pred_result)
-        acc_series = accuracy_score(y_test_series, pred_series)
-
-        f1_result = f1_score(y_test_result, pred_result, average='macro')
-        f1_series = f1_score(y_test_series, pred_series, average='macro')
+        acc_result, f1_result = evaluar_y_reportar(modelo_result, X_test, y_test_result, "Result", verbose=False)
+        acc_series, f1_series = evaluar_y_reportar(modelo_series, X_test, y_test_series, "Series", verbose=False)
 
         history["attempts"].append(intento)
         history["result_acc"].append(acc_result)
@@ -142,7 +155,8 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITER
 
         if verbose:
             sys.stdout.write(
-                f"\r🔄 Intento {intento}/{max_iter} | Acc Result: {acc_result:.4f} | Series: {acc_series:.4f} | F1 Result: {f1_result:.4f} | Series: {f1_series:.4f}"
+                f"\r🔄 Intento {intento}/{max_iter} | Acc Result: {acc_result:.4f} | Series: {acc_series:.4f} | "
+                f"F1 Result: {f1_result:.4f} | Series: {f1_series:.4f}"
             )
             sys.stdout.flush()
 
@@ -160,31 +174,25 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY , max_iter=ITER
                 print(f"\n✔️ Umbral alcanzado en intento {intento}")
             break
 
-    mejor_acc_result_anterior = mejor_acc_result
-    mejor_acc_series_anterior = mejor_acc_series
-
-    if verbose:
-        print("\n\n🔍 Reporte Final del Mejor Modelo Result:")
-        if mejor_modelo_result:
-            print(classification_report(y_test_result, mejor_modelo_result.predict(X_test)))
-
-        print("\n🔍 Reporte Final del Mejor Modelo Series:")
-        if mejor_modelo_series:
-            print(classification_report(y_test_series, mejor_modelo_series.predict(X_test)))
-
-        # 👇 Agrega esto después del reporte
-        print("\n🔎 Comparación de mejoras:")
-        if modelo_result_path and os.path.exists(modelo_result_path):
-            print(f"   Result: anterior={mejor_acc_result_anterior:.4f} vs nuevo={mejor_acc_result:.4f} → {'✅ Mejorado' if mejor_acc_result > mejor_acc_result_anterior else '❌ Sin mejora'}")
-        if modelo_series_path and os.path.exists(modelo_series_path):
-            print(f"   Series: anterior={mejor_acc_series_anterior:.4f} vs nuevo={mejor_acc_series:.4f} → {'✅ Mejorado' if mejor_acc_series > mejor_acc_series_anterior else '❌ Sin mejora'}")
-
+    # Comparar y guardar modelos
     if save_models:
-        os.makedirs(os.path.dirname(modelo_result_path), exist_ok=True)
-        if mejor_modelo_result:
-            joblib.dump(mejor_modelo_result, modelo_result_path)
-        if mejor_modelo_series:
-            joblib.dump(mejor_modelo_series, modelo_series_path)
+        print("\n🔎 Comparación de mejoras:")
+
+        try:
+            os.makedirs(os.path.dirname(modelo_result_path), exist_ok=True)
+
+            if modelo_result_path:
+                print(f"   Result: precisión final={mejor_acc_result:.4f}")
+                if mejor_modelo_result:
+                    joblib.dump(mejor_modelo_result, modelo_result_path)
+
+            if modelo_series_path:
+                print(f"   Series: precisión final={mejor_acc_series:.4f}")
+                if mejor_modelo_series:
+                    joblib.dump(mejor_modelo_series, modelo_series_path)
+
+        except Exception as e:
+            print(f"❌ Error al guardar modelos: {e}")
 
     return mejor_modelo_result, mejor_modelo_series, mejor_acc_result, mejor_acc_series, intento, history
 
