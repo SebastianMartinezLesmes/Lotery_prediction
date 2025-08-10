@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 
-ITERATIONS = 100
+ITERATIONS = 1000
 MIN_ACCURACY = 0.7
 
 warnings.filterwarnings(
