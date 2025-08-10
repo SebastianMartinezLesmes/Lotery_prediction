@@ -2,6 +2,9 @@ import os
 import time
 import warnings
 from datetime import datetime
+from src.utils.result import guardar_resultado
+from src.excel.read_excel import obtener_loterias_disponibles
+from src.utils.entrenamiento import entrenar_modelos_por_loteria
 from openpyxl import load_workbook
 import pandas as pd
 import joblib
