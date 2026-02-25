@@ -8,7 +8,7 @@ __pycache__
 *.log
 
 # 📊 Resultados generados por el programa
-resultados_astro.xlsx
+data/resultados_*.xlsx
 
 # 📊 resultados de la predicción
 results.json
@@ -16,6 +16,9 @@ results.json
 # 📊 modelos de prediction
 /IA_models/*
 !/IA_models/.gitkeep
+
+# big Logs
+logs/
 
 # 🛠 Archivos temporales de entorno o IDE
 # .env
@@ -39,3 +42,6 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Task
+task/

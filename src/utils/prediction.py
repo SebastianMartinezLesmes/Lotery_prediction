@@ -4,13 +4,16 @@ import warnings
 from datetime import datetime
 from src.utils.result import guardar_resultado
 from src.excel.read_excel import obtener_loterias_disponibles
-from src.utils.entrenamiento import entrenar_modelos_por_loteria
 from openpyxl import load_workbook
 import pandas as pd
 import joblib
-from src.utils.config import ARCHIVO_EXCEL, TIEMPOS_LOG, CARPETA_MODELOS
+from src.core.config import settings
 from src.excel.read_excel import obtener_loterias_disponibles
 from src.utils.result import guardar_resultado
+
+ARCHIVO_EXCEL = str(settings.get_excel_path())
+TIEMPOS_LOG = str(settings.LOGS_DIR / "tiempos.log")
+CARPETA_MODELOS = str(settings.MODELS_DIR)
 from src.utils.zodiaco import obtener_zodiaco
 from src.utils.training import entrenar_modelos_por_loteria
 
@@ -18,7 +21,7 @@ warnings.filterwarnings("ignore")
 
 def cargar_datos_excel():
     if not os.path.exists(ARCHIVO_EXCEL):
-        print("❌ Archivo Excel no encontrado.")
+        print("ERROR: Archivo Excel no encontrado.")
         return pd.DataFrame()
 
     wb = load_workbook(ARCHIVO_EXCEL, read_only=True)
@@ -85,9 +88,9 @@ def predecir_para_loteria(df, loteria):
     simbolo = obtener_zodiaco(simbolo_codificado)
 
 
-    print(f"\n🎰 {loteria}:")
-    print(f"   🔢 Número: {str(numero).zfill(4)}")
-    print(f"   🧿 Símbolo: {simbolo}")
+    print(f"\n>> {loteria}:")
+    print(f"   Número: {str(numero).zfill(4)}")
+    print(f"   Símbolo: {simbolo}")
 
     guardar_resultado({
         "loteria": loteria,
@@ -103,19 +106,19 @@ def predecir_para_loteria(df, loteria):
 def main():
     df = cargar_datos_excel()
     if df.empty:
-        print("⚠️ No se pudieron cargar datos del archivo.")
+        print("!! No se pudieron cargar datos del archivo.")
         return
 
     loterias = obtener_loterias_disponibles()
-    print(f"\n🎯 Loterías detectadas: {loterias}")
+    print(f"\nLoterías detectadas: {loterias}")
 
     for loteria in loterias:
-        print(f"\n🔮 Procesando: {loteria}")
+        print(f"\n>> Procesando: {loteria}")
         df_loteria = preparar_datos(df, loteria)
         if not df_loteria.empty:
             predecir_para_loteria(df_loteria, loteria)
         else:
-            print(f"⚠️ No hay suficientes datos para {loteria}")
+            print(f"!! No hay suficientes datos para {loteria}")
 
 if __name__ == "__main__":
     main()

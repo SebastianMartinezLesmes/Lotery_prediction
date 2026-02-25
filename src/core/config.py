@@ -28,6 +28,7 @@ class Settings:
     # Model Training
     ITERATIONS: int = int(os.getenv("ITERATIONS", "8000"))
     MIN_ACCURACY: float = float(os.getenv("MIN_ACCURACY", "0.7"))
+    MAX_TRAINING_LOGS: int = int(os.getenv("MAX_TRAINING_LOGS", "3"))
     
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -42,7 +43,7 @@ class Settings:
     @classmethod
     def get_excel_path(cls) -> Path:
         """Retorna la ruta completa al archivo Excel."""
-        return cls.BASE_DIR / cls.EXCEL_FILENAME
+        return cls.DATA_DIR / cls.EXCEL_FILENAME
     
     @classmethod
     def get_results_path(cls) -> Path:

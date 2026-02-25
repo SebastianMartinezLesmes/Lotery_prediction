@@ -1,19 +1,16 @@
 from openpyxl import load_workbook
 from datetime import datetime, timedelta
 import os
-import subprocess
-import sys 
-from src.utils.config import CREATE_DOC  
+from src.core.config import settings
 
-ARCHIVO = CREATE_DOC
-SCRIPT_ACTUALIZACION = ["-m", "src.excel.excel"]
+ARCHIVO = str(settings.get_excel_path())
 
 def fecha_ayer():
     return (datetime.today() - timedelta(days=1)).date()
 
 def obtener_ultima_fecha_excel():
     if not os.path.exists(ARCHIVO):
-        print("📁 El archivo Excel no existe.")
+        print("El archivo Excel no existe.")
         return None
 
     try:
@@ -27,7 +24,7 @@ def obtener_ultima_fecha_excel():
                 break
 
         if not fecha_col:
-            print("⚠️ No se encontró una columna llamada 'fecha'.")
+            print("!! No se encontró una columna llamada 'fecha'.")
             return None
 
         fechas = []
@@ -45,17 +42,12 @@ def obtener_ultima_fecha_excel():
         else:
             return None
     except Exception as e:
-        print(f"❌ Error al leer el archivo: {e}")
+        print(f"ERROR al leer el archivo: {e}")
         return None
-
-def ejecutar_actualizacion():
-    print(f"⏳ Ejecutando actualización con {SCRIPT_ACTUALIZACION}...")
-    subprocess.run([sys.executable] + SCRIPT_ACTUALIZACION, check=True)
-    print("✅ Actualización completada.")
 
 def obtener_loterias_disponibles():
     if not os.path.exists(ARCHIVO):
-        print("❌ Archivo Excel no encontrado.")
+        print("ERROR: Archivo Excel no encontrado.")
         return []
 
     wb = load_workbook(ARCHIVO, read_only=True)
@@ -65,7 +57,7 @@ def obtener_loterias_disponibles():
     loteria_idx = headers.index("lottery") if "lottery" in headers else -1
 
     if loteria_idx == -1:
-        print("⚠️ No se encontró la columna 'lottery'")
+        print("!! No se encontró la columna 'lottery'")
         return []
 
     loterias = set()
@@ -80,16 +72,16 @@ if __name__ == "__main__":
     ayer = fecha_ayer()
     ultima_fecha = obtener_ultima_fecha_excel()
 
-    print(f"📅 Fecha de ayer: {ayer}")
-    print(f"📄 Última fecha registrada: {ultima_fecha}")
+    print(f"Fecha de ayer: {ayer}")
+    print(f"Última fecha registrada: {ultima_fecha}")
 
     if ultima_fecha is None or ultima_fecha < ayer:
-        print("🔄 Se necesita actualizar los resultados.")
-        ejecutar_actualizacion()
+        print(">> Se necesita actualizar los resultados.")
+        print("   Ejecuta: python main.py --collect")
     else:
-        print("✅ Los resultados ya están actualizados.")
+        print("OK Los resultados ya están actualizados.")
 
     loterias = obtener_loterias_disponibles()
-    print("📋 Loterías disponibles en el Excel:")
+    print("Loterías disponibles en el Excel:")
     for lot in loterias:
         print(f"   - {lot}")

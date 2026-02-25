@@ -42,4 +42,4 @@ def guardar_resultado(prediccion, modelo_usado=None, confianza=None):
     with open(ruta_salida, "w", encoding="utf-8") as f:
         json.dump(datos, f, indent=4, ensure_ascii=False)
 
-    print(f"📦 Resultado guardado en {ruta_salida}")
+    print(f">> Resultado guardado en {ruta_salida}")

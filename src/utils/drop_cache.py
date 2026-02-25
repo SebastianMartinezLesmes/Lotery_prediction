@@ -8,7 +8,7 @@ def onerror(func, path, exc_info):
         os.chmod(path, stat.S_IWRITE)  # Forzar permisos de escritura
         func(path)
     except Exception as e:
-        print(f"⚠️ Error forzado al eliminar {path}: {e}")
+        print(f"!! Error forzado al eliminar {path}: {e}")
 
 def eliminar_pycache(directorio_raiz="."):
     eliminadas = 0
@@ -18,12 +18,12 @@ def eliminar_pycache(directorio_raiz="."):
             ruta_completa = os.path.join(dirpath, "__pycache__")
             try:
                 shutil.rmtree(ruta_completa, onerror=onerror)
-                print(f"🗑️ Eliminado: {ruta_completa}")
+                print(f"Eliminado: {ruta_completa}")
                 eliminadas += 1
             except Exception as e:
-                print(f"⚠️ Error al eliminar {ruta_completa}: {e}")
+                print(f"!! Error al eliminar {ruta_completa}: {e}")
 
     if eliminadas == 0:
-        print("✅ No se eliminaron carpetas '__pycache__'.")
+        print("No se eliminaron carpetas '__pycache__'.")
     else:
-        print(f"\n✅ Se eliminaron {eliminadas} carpetas '__pycache__'.")
+        print(f"\nSe eliminaron {eliminadas} carpetas '__pycache__'.")
