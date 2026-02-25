@@ -14,17 +14,25 @@ resultados_astro.xlsx
 results.json
 
 # 📊 modelos de prediction
-/models/*
-!/models/.gitkeep
+/IA_models/*
+!/IA_models/.gitkeep
 
 # 🛠 Archivos temporales de entorno o IDE
-*.env
+# .env
 *.venv
 .env/
 .venv/
+venv/
+env/
 *.swp
 *.bak
 *.tmp
+
+# 📦 Dependencias
+node_modules/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # 🧠 Archivos de configuración específicos del sistema o IDE
 .vscode/
