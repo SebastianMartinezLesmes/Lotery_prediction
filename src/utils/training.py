@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 
-ITERATIONS = 2000
+ITERATIONS = 8000
 MIN_ACCURACY = 0.7
 
 warnings.filterwarnings(
@@ -36,7 +36,7 @@ def evaluar_y_reportar(modelo, X_test, y_test, nombre_modelo, verbose=True):
 def generar_ruta_modelo(nombre_loteria, tipo):
     nombre_archivo = f"modelo_{tipo}_{nombre_loteria.lower().replace(' ', '_')}.pkl"
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    ruta_modelo = os.path.join(BASE_DIR, "models", nombre_archivo)
+    ruta_modelo = os.path.join(BASE_DIR, "IA_models", nombre_archivo)
     os.makedirs(os.path.dirname(ruta_modelo), exist_ok=True)
 
     return ruta_modelo

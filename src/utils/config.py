@@ -24,8 +24,8 @@ ITERATIONS = 8000
 MIN_ACCURACY  = 0.7
 
 # 📁 File's routers for best models
-MODELO_RESULT_PATH = "models/modelo_result_astro.pkl"
-MODELO_SERIES_PATH = "models/modelo_series_astro.pkl"
+MODELO_RESULT_PATH = "IA_models/modelo_result_astro.pkl"
+MODELO_SERIES_PATH = "IA_models/modelo_series_astro.pkl"
 
 # -----------------------------------
 # 📂 Prediction.py
@@ -33,4 +33,4 @@ MODELO_SERIES_PATH = "models/modelo_series_astro.pkl"
 
 ARCHIVO_EXCEL = CREATE_DOC
 TIEMPOS_LOG = "logs/tiempos.log"
-CARPETA_MODELOS = "models"
+CARPETA_MODELOS = "IA_models"

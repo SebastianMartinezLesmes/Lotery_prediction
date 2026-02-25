@@ -25,7 +25,7 @@ LOTTERY_PREDICTION/
 ├── logs/
 │   ├── dependencias.log
 │   └── log_loteria.log
-├── models/
+├── IA_models/
 │   ├── modelo_result_{loteria}.pkl
 │   └── modelo_series_{loteria}.pkl
 ├── src/
@@ -52,23 +52,50 @@ LOTTERY_PREDICTION/
 
 ## 🚀 Ejecución del Sistema
 
-### Opción 1: Modo completo (automatizado)
+### Opción 1: Pipeline completo (recomendado)
 
 ```bash
 python index.py
 ```
 
-Este comando ejecuta:
+Este comando ejecuta el pipeline completo:
+1. Instalación/verificación de dependencias
+2. Recolección o actualización de datos desde Excel/API
+3. Predicción de resultados usando modelos previamente entrenados
+4. Limpieza de archivos de caché
 
-1. Instalación de dependencias.
-2. Recolección o actualización de datos desde Excel/API.
-3. Predicción de resultados usando modelos previamente entrenados.
-4. Limpieza de archivos de caché.
-
-### Opción 2: Entrenamiento directo de modelos
+### Opción 2: CLI con componentes individuales
 
 ```bash
-python src/utils/training.py
+# Ver configuración actual
+python main.py --config
+
+# Ejecutar pipeline completo
+python main.py
+
+# Solo verificar dependencias
+python main.py --deps
+
+# Solo recolectar datos
+python main.py --collect
+
+# Solo entrenar modelos
+python main.py --train
+
+# Solo generar predicciones
+python main.py --predict
+
+# Predicción para lotería específica
+python main.py --predict --lottery ASTRO
+
+# Ver ayuda
+python main.py --help
+```
+
+### Opción 3: Entrenamiento directo de modelos
+
+```bash
+python -m src.utils.training
 ```
 
 Esto buscará los modelos `.pkl` previamente creados por lotería. Si existen, los perfeccionará. Si no se encuentra ningún modelo previo, se mostrará un mensaje:  
@@ -93,7 +120,7 @@ El flujo general de predicción y entrenamiento incluye:
    - `modelo_series_{loteria}.pkl`: para aprender secuencias históricas usando n-gramas.
 
 4. **Evaluación:**  
-   Se comparan modelos mediante validación cruzada y se guarda el mejor en la carpeta `models/`.
+   Se comparan modelos mediante validación cruzada y se guarda el mejor en la carpeta `IA_models/`.
 
 5. **Predicción:**  
    Basada en patrones aprendidos para cada lotería de forma individual.
@@ -160,7 +187,30 @@ scripts = [
 
 - Python 3.8+
 - pip
-- pandas, numpy, openpyxl, scikit-learn, entre otros
+
+### Instalación de dependencias:
+
+```bash
+# Instalar todas las dependencias
+pip install -r requirements.txt
+
+# O ejecutar el sistema (instala automáticamente)
+python index.py
+```
+
+### Configuración:
+
+1. Copiar el archivo de ejemplo:
+```bash
+cp .env.example .env
+```
+
+2. Editar `.env` con tus valores:
+```env
+FIND_LOTERY=ASTRO
+ITERATIONS=8000
+MIN_ACCURACY=0.7
+```
 
 ---
 
