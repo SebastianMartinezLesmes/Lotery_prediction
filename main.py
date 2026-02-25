@@ -49,14 +49,88 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
     """
     try:
         logger.info(f"Iniciando entrenamiento{f' para {loteria}' if loteria else ''}...")
+        
+        import pandas as pd
+        import os
+        from src.core.config import settings
         from src.utils.training import entrenar_modelos_por_loteria
         
-        # Aquí iría la lógica de entrenamiento
-        print(f"✅ Entrenamiento completado")
+        # Ruta al archivo Excel
+        ruta_excel = settings.get_excel_path()
+        
+        if not os.path.exists(ruta_excel):
+            print(f"Archivo no encontrado: {ruta_excel}")
+            print("   Ejecuta primero: python main.py --collect")
+            return False
+        
+        print(f"Leyendo datos desde: {ruta_excel}")
+        
+        # Leer datos
+        df = pd.read_excel(ruta_excel)
+        
+        # Validar columnas
+        columnas_necesarias = {"fecha", "lottery", "result", "series"}
+        if not columnas_necesarias.issubset(df.columns):
+            print(f"Faltan columnas necesarias: {columnas_necesarias - set(df.columns)}")
+            return False
+        
+        # Preprocesar
+        df = df.dropna(subset=["fecha", "lottery", "result", "series"])
+        df["result"] = df["result"].astype(int)
+        df["fecha"] = pd.to_datetime(df["fecha"], dayfirst=True)
+        df["series"] = df["series"].astype(str).str.upper().astype("category").cat.codes
+        
+        # Extraer features
+        df["dia"] = df["fecha"].dt.day
+        df["mes"] = df["fecha"].dt.month
+        df["anio"] = df["fecha"].dt.year
+        df["dia_semana"] = df["fecha"].dt.weekday
+        
+        # Obtener loterías
+        if loteria:
+            loterias = [loteria]
+        else:
+            loterias = df["lottery"].str.lower().unique()
+        
+        print(f"\nLoterias a entrenar: {list(loterias)}\n")
+        
+        # Entrenar cada lotería
+        for nombre_loteria in loterias:
+            print(f"\n{'='*70}")
+            print(f"Entrenando modelos para: {nombre_loteria.upper()}")
+            print('='*70)
+            
+            df_loteria = df[df["lottery"].str.lower() == nombre_loteria.lower()]
+            
+            if len(df_loteria) < 50:
+                print(f"Datos insuficientes para {nombre_loteria}: {len(df_loteria)} registros")
+                print("   Se necesitan al menos 50 registros")
+                continue
+            
+            X_l = df_loteria[["dia", "mes", "anio", "dia_semana"]].values
+            y_r = df_loteria["result"].values
+            y_s = df_loteria["series"].values
+            
+            entrenar_modelos_por_loteria(
+                X=X_l,
+                y_result=y_r,
+                y_series=y_s,
+                nombre_loteria=nombre_loteria,
+                min_acc=settings.MIN_ACCURACY,
+                max_iter=settings.ITERATIONS,
+                verbose=True  # ✅ Activar visualización
+            )
+        
+        print(f"\n{'='*70}")
+        print("Entrenamiento completado para todas las loterias")
+        print('='*70)
         return True
+        
     except Exception as e:
-        logger.error(f"Error en entrenamiento: {e}")
-        print(f"❌ Error: {e}")
+        logger.error(f"Error en entrenamiento: {e}", exc_info=True)
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 

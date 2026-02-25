@@ -5,18 +5,18 @@ import sys
 import importlib.util
 import sysconfig
 
-from src.utils.logger import configurar_logger
+from src.core.logger import get_main_logger
 
-log = configurar_logger("DependenciasLogger", "dependencias.log")
+log = get_main_logger()
 
 def actualizar_pip():
     try:
-        print("🔄 Actualizando pip...")
+        print("Actualizando pip...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-        print("✅ pip actualizado correctamente.\n")
+        print("pip actualizado correctamente.\n")
         log.info("pip actualizado correctamente.")
     except subprocess.CalledProcessError as e:
-        print("❌ Error al actualizar pip.")
+        print("Error al actualizar pip.")
         log.error(f"Error al actualizar pip: {e}")
 
 def obtener_archivos_py(base_path="."):
@@ -38,7 +38,7 @@ def extraer_dependencias(archivo):
         modulos = list(set([mod.split('.')[0] for mod in coincidencias]))
         return modulos
     except Exception as e:
-        log.warning(f"⚠️ No se pudo analizar {archivo}: {e}")
+        log.warning(f"No se pudo analizar {archivo}: {e}")
         return []
 
 def esta_instalado(modulo):
@@ -54,12 +54,12 @@ def es_modulo_estandar(modulo):
 
 def instalar(modulo):
     try:
-        print(f"📦 Instalando módulo: {modulo}")
+        print(f"Instalando módulo: {modulo}")
         subprocess.check_call([sys.executable, "-m", "pip", "install", modulo])
-        print(f"✅ {modulo} instalado correctamente.\n")
+        print(f"{modulo} instalado correctamente.\n")
         log.info(f"Módulo instalado: {modulo}")
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error al instalar {modulo}.")
+        print(f"Error al instalar {modulo}.")
         log.error(f"Error al instalar {modulo}: {e}")
 
 def procesar_archivos():
@@ -68,37 +68,37 @@ def procesar_archivos():
 
     total_dependencias = set()
     for archivo in archivos_py:
-        print(f"\n🔍 Analizando: {archivo}")
+        print(f"\nAnalizando: {archivo}")
         dependencias = extraer_dependencias(archivo)
         pendientes = []
 
         for dep in dependencias:
             if dep in modulos_locales:
-                print(f"⏩ Módulo local ignorado: {dep}")
+                print(f">> Módulo local ignorado: {dep}")
                 continue
             if es_modulo_estandar(dep):
-                print(f"✅ Módulo estándar: {dep}")
+                print(f"OK Módulo estándar: {dep}")
                 continue
             if not esta_instalado(dep):
-                print(f"🚫 Falta instalar: {dep}")
+                print(f"!! Falta instalar: {dep}")
                 pendientes.append(dep)
             else:
-                print(f"✅ {dep} ya está instalado.")
+                print(f"OK {dep} ya está instalado.")
 
         for dep in pendientes:
             instalar(dep)
             total_dependencias.add(dep)
 
         if not pendientes:
-            print("📁 Todas las dependencias de este archivo están satisfechas.")
-            log.info(f"{archivo} ✅ dependencias completas.")
+            print("Todas las dependencias de este archivo están satisfechas.")
+            log.info(f"{archivo} - dependencias completas.")
         else:
-            log.info(f"{archivo} 🔧 instaladas: {pendientes}")
+            log.info(f"{archivo} - instaladas: {pendientes}")
 
     if total_dependencias:
-        print(f"\n🎯 Dependencias nuevas instaladas: {', '.join(sorted(total_dependencias))}")
+        print(f"\nDependencias nuevas instaladas: {', '.join(sorted(total_dependencias))}")
     else:
-        print("\n✔️ No se encontraron nuevas dependencias por instalar.")
+        print("\nNo se encontraron nuevas dependencias por instalar.")
 
 if __name__ == "__main__":
     actualizar_pip()

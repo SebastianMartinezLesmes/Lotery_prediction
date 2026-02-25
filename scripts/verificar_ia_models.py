@@ -86,7 +86,12 @@ def verificar_config_legacy():
     print("\n🔍 Verificando configuración legacy...\n")
     
     try:
-        from src.utils.config import CARPETA_MODELOS, MODELO_RESULT_PATH, MODELO_SERIES_PATH
+        # Nota: src/utils/config.py es legacy, pero verificamos por compatibilidad
+        try:
+            from src.utils.config import CARPETA_MODELOS, MODELO_RESULT_PATH, MODELO_SERIES_PATH
+        except ImportError:
+            print("⚠️  src/utils/config.py no encontrado (ya fue migrado)")
+            return True
         
         checks = []
         
