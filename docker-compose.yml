@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  lottery-system:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lottery-prediction:latest
+    container_name: lottery-system
+    
+    # Variables de entorno
+    environment:
+      - API_URL=${API_URL:-https://api-resultadosloterias.com/api/results/}
+      - FIND_LOTERY=${FIND_LOTERY:-ASTRO}
+      - ITERATIONS=${ITERATIONS:-1000}
+      - MIN_ACCURACY=${MIN_ACCURACY:-0.7}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ALERT_ACCURACY_WARNING=${ALERT_ACCURACY_WARNING:-0.6}
+      - ALERT_ACCURACY_CRITICAL=${ALERT_ACCURACY_CRITICAL:-0.5}
+    
+    # Volúmenes para persistencia
+    volumes:
+      - ./IA_models:/app/IA_models
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    
+    # Comando por defecto (puede sobrescribirse)
+    command: python main.py
+    
+    # Reiniciar en caso de fallo
+    restart: unless-stopped
+    
+    # Recursos
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+  
+  # Servicio para entrenamientos programados
+  lottery-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lottery-prediction:latest
+    container_name: lottery-scheduler
+    
+    environment:
+      - API_URL=${API_URL:-https://api-resultadosloterias.com/api/results/}
+      - FIND_LOTERY=${FIND_LOTERY:-ASTRO}
+      - ITERATIONS=${ITERATIONS:-1000}
+      - MIN_ACCURACY=${MIN_ACCURACY:-0.7}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    volumes:
+      - ./IA_models:/app/IA_models
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    
+    # Ejecutar scheduler
+    command: python scripts/scheduler.py
+    
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+networks:
+  default:
+    name: lottery-network

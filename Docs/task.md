@@ -27,7 +27,7 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 ## Performance
 
 - [ ] **Paralelización** - Entrenar múltiples loterías en paralelo con `multiprocessing`
-- [ ] **Batch predictions** - Predecir múltiples fechas de una vez
+- [x] **Batch predictions** - ✅ Predecir múltiples fechas de una vez (sistema completo implementado)
 - [ ] **Modelo único multi-tarea** - Un solo modelo que predice todas las loterías en lugar de uno por lotería
 - [x] **Reducir iteraciones** - ✅ Implementado early stopping, ya no itera 8000 veces innecesariamente
 
@@ -35,16 +35,16 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 
 - [x] **Dashboard web** - ✅ Visualización en consola de resultados al completar pipeline
 - [x] **Métricas en tiempo real** - ✅ Barra de progreso en tiempo real durante entrenamiento
-- [ ] **Alertas** - Notificaciones cuando accuracy cae bajo umbral
+- [x] **Alertas** - ⚠️ Notificaciones cuando accuracy cae bajo umbral (consola, archivo, email) - **NOTA: Parámetros muy bajos aún, siempre genera alerta. Ajustar umbrales en .env según necesidad**al (consola, archivo, email)
 - [x] **Tracking de experimentos** - ✅ Sistema de logs JSON con historial completo de entrenamientos
 
 ## Infraestructura
 
-- [ ] **Containerización** - Crear Dockerfile para deployment consistente
+- [x] **Containerización** - ✅ Dockerfile, docker-compose.yml y documentación completa
 - [ ] **CI/CD** - GitHub Actions para tests automáticos y deployment
 - [ ] **API REST** - Exponer predicciones vía FastAPI en lugar de solo scripts
 - [ ] **Base de datos** - Migrar de Excel a PostgreSQL o MongoDB para mejor escalabilidad
-- [ ] **Scheduler** - Usar cron jobs o Celery para entrenamientos automáticos periódicos
+- [x] **Scheduler** - ✅ Sistema completo con schedule, APScheduler y cron para entrenamientos automáticos
 
 ## Documentación
 
@@ -63,9 +63,9 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 
 ## 📊 Progreso Total
 
-**Completadas: 20 de 38 tareas (53%)**
+**Completadas: 22 de 38 tareas (58%)**
 
-### ✅ Completadas (20)
+### ✅ Completadas (22)
 1. Separar configuración por entorno
 2. Manejo de errores robusto
 3. Validación de datos con Pydantic
@@ -86,6 +86,9 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 18. Feature engineering avanzado
 19. Métricas de negocio
 20. Sistema de entrenamiento avanzado
+21. Batch predictions (predicciones por lotes)
+22. Sistema de alertas y notificaciones 🆕
+21. Batch predictions (predicciones por lotes) 🆕
 
 ### 🔄 Mejoras Adicionales Implementadas (No en lista original)
 1. **Sistema de gestión de logs inteligente** - Mantiene Top 3 entrenamientos
