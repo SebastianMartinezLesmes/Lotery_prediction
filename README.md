@@ -125,7 +125,7 @@ python main.py --deps
 # Solo recolectar datos
 python main.py --collect
 
-# Solo entrenar modelos
+# Solo entrenar modelos (modo básico)
 python main.py --train
 
 # Solo generar predicciones
@@ -138,7 +138,28 @@ python main.py --predict --lottery ASTRO
 python main.py --help
 ```
 
-### Opción 3: Entrenamiento directo de modelos
+### Opción 3: Entrenamiento Avanzado 🆕
+
+```bash
+# Entrenamiento con ML avanzado (recomendado)
+python scripts/train_advanced.py
+
+# Con algoritmo específico
+python scripts/train_advanced.py --algorithm XGBoost
+
+# Modo AUTO (prueba todos los algoritmos)
+python scripts/train_advanced.py --algorithm auto
+
+# Con Grid Search (más preciso)
+python scripts/train_advanced.py --search grid
+
+# Personalizado
+python scripts/train_advanced.py --algorithm auto --search grid --cv-folds 10
+```
+
+Ver [ML_AVANZADO.md](Docs/ML_AVANZADO.md) para más opciones.
+
+### Opción 4: Entrenamiento directo de modelos (básico)
 
 ```bash
 python -m src.utils.training
@@ -150,6 +171,21 @@ Esto buscará los modelos `.pkl` previamente creados por lotería. Si existen, l
 ---
 
 ## 🧠 Funcionamiento del Sistema de Machine Learning
+
+El sistema ofrece dos modos de entrenamiento:
+
+### Modo Básico (Legacy)
+Flujo tradicional con RandomForest y features básicas.
+
+### Modo Avanzado (Nuevo) 🆕
+Sistema mejorado con:
+- **Validación cruzada estratificada** con StratifiedKFold
+- **Optimización de hiperparámetros** (GridSearchCV/RandomizedSearchCV)
+- **Múltiples algoritmos** (RandomForest, XGBoost, LightGBM)
+- **Feature engineering avanzado** (40+ features)
+- **Métricas de negocio** (ROI, aciertos consecutivos, confianza)
+
+Ver [ML_AVANZADO.md](Docs/ML_AVANZADO.md) para documentación completa.
 
 El flujo general de predicción y entrenamiento incluye:
 
@@ -337,6 +373,9 @@ python scripts/verificar_ia_models.py
 # Analizar entrenamientos
 python scripts/visualizar_entrenamiento.py --latest
 
+# Entrenamiento avanzado de ML
+python scripts/train_advanced.py --algorithm auto
+
 # Limpiar caché manualmente
 python -m src.utils.drop_cache
 
@@ -356,10 +395,11 @@ El sistema utiliza una arquitectura modular con separación de responsabilidades
 
 ### Tecnologías Principales
 
-- **Machine Learning:** scikit-learn (RandomForestClassifier)
+- **Machine Learning:** scikit-learn (RandomForestClassifier, StratifiedKFold, GridSearchCV)
+- **ML Avanzado:** XGBoost, LightGBM
 - **Validación:** Pydantic
 - **Configuración:** python-dotenv
-- **Datos:** pandas, openpyxl
+- **Datos:** pandas, openpyxl, numpy
 - **Logging:** logging (Python estándar)
 
 ## 🚨 Solución de Problemas
