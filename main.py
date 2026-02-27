@@ -154,6 +154,39 @@ def ejecutar_prediccion(loteria: Optional[str] = None) -> bool:
         return False
 
 
+def ejecutar_batch_prediction(dias: int = 7, loteria: Optional[str] = None, guardar: bool = False) -> bool:
+    """
+    Genera predicciones por lotes para múltiples fechas.
+    
+    Args:
+        dias: Número de días a predecir
+        loteria: Nombre específico de lotería (opcional)
+        guardar: Si se debe guardar en archivo JSON
+    """
+    try:
+        logger.info(f"Generando predicciones batch para {dias} días...")
+        from src.utils.batch_prediction import (
+            predecir_batch_todas_loterias,
+            mostrar_predicciones_batch,
+            guardar_predicciones_batch
+        )
+        
+        loterias = [loteria] if loteria else None
+        predicciones = predecir_batch_todas_loterias(dias=dias, loterias=loterias)
+        
+        mostrar_predicciones_batch(predicciones)
+        
+        if guardar:
+            guardar_predicciones_batch(predicciones)
+            print("\n✅ Predicciones guardadas en archivo JSON")
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error en batch prediction: {e}")
+        print(f"❌ Error: {e}")
+        return False
+
+
 def ejecutar_pipeline_completo() -> bool:
     """Ejecuta el pipeline completo."""
     print("🎯 Ejecutando pipeline completo...\n")
@@ -192,6 +225,9 @@ Ejemplos de uso:
   python main.py --train                  # Solo entrenamiento
   python main.py --predict                # Solo predicción
   python main.py --predict --lottery ASTRO # Predicción específica
+  python main.py --batch                  # Predicciones para 7 días
+  python main.py --batch --days 30        # Predicciones para 30 días
+  python main.py --batch --save           # Guardar en JSON
         """
     )
     
@@ -217,6 +253,25 @@ Ejemplos de uso:
         '--predict',
         action='store_true',
         help='Generar predicciones'
+    )
+    
+    parser.add_argument(
+        '--batch',
+        action='store_true',
+        help='Predicciones por lotes (múltiples fechas)'
+    )
+    
+    parser.add_argument(
+        '--days',
+        type=int,
+        default=7,
+        help='Número de días para batch prediction (default: 7)'
+    )
+    
+    parser.add_argument(
+        '--save',
+        action='store_true',
+        help='Guardar predicciones batch en archivo JSON'
     )
     
     parser.add_argument(
@@ -272,7 +327,7 @@ def main() -> int:
             return 0
         
         # Si no hay argumentos, ejecutar pipeline completo
-        if not any([args.deps, args.collect, args.train, args.predict]):
+        if not any([args.deps, args.collect, args.train, args.predict, args.batch]):
             return 0 if ejecutar_pipeline_completo() else 1
         
         # Ejecutar componentes individuales
@@ -289,6 +344,9 @@ def main() -> int:
         
         if args.predict:
             exito = ejecutar_prediccion(args.lottery) and exito
+        
+        if args.batch:
+            exito = ejecutar_batch_prediction(args.days, args.lottery, args.save) and exito
         
         return 0 if exito else 1
     

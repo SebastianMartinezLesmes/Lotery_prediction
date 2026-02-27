@@ -84,6 +84,7 @@ Lotery_prediction/
 │       ├── dependencies.py
 │       ├── drop_cache.py
 │       ├── prediction.py
+│       ├── batch_prediction.py  # Predicciones por lotes 🆕
 │       ├── result.py
 │       ├── training.py
 │       ├── training_visualizer.py
@@ -133,6 +134,12 @@ python main.py --predict
 
 # Predicción para lotería específica
 python main.py --predict --lottery ASTRO
+
+# Predicciones por lotes (múltiples fechas) 🆕
+python main.py --batch                    # 7 días (default)
+python main.py --batch --days 30          # 30 días
+python main.py --batch --save             # Guardar en JSON
+python main.py --batch --lottery "ASTRO LUNA" --days 14
 
 # Ver ayuda
 python main.py --help
@@ -241,6 +248,95 @@ python visualizar_entrenamiento.py --compare
 - Improvements: contador de mejoras
 
 Ver [COMO_FUNCIONA_ENTRENAMIENTO.md](Docs/COMO_FUNCIONA_ENTRENAMIENTO.md) para más detalles.
+
+### 📊 Predicciones por Lotes (Batch Predictions) 🆕
+
+El sistema permite generar predicciones para múltiples fechas de una vez:
+
+```bash
+# Predicción para los próximos 7 días
+python main.py --batch
+
+# Predicción para 30 días
+python main.py --batch --days 30
+
+# Guardar resultados en JSON
+python main.py --batch --days 14 --save
+
+# Lotería específica
+python main.py --batch --lottery "ASTRO LUNA" --days 7
+```
+
+**Salida de ejemplo:**
+```
+======================================================================
+PREDICCIONES BATCH - MÚLTIPLES FECHAS
+======================================================================
+
+>> ASTRO LUNA
+----------------------------------------------------------------------
+   2026-02-27 (Vie) | Número: 0042 | Símbolo: SAGITARIO
+   2026-02-28 (Sab) | Número: 0156 | Símbolo: TAURO
+   2026-03-01 (Dom) | Número: 0089 | Símbolo: LEO
+   ...
+```
+
+**Ventajas:**
+- Genera predicciones para múltiples fechas en una sola ejecución
+- Exporta resultados en formato JSON estructurado
+- Ideal para análisis de tendencias y planificación
+- Más eficiente que ejecutar predicciones individuales
+
+Ver [BATCH_PREDICTIONS.md](Docs/BATCH_PREDICTIONS.md) para más detalles y ejemplos avanzados.
+
+### 🚨 Sistema de Alertas 🆕
+
+El sistema monitorea automáticamente el rendimiento de los modelos y notifica cuando las métricas caen bajo umbrales configurados:
+
+**Configuración en `.env`:**
+```env
+ALERT_ACCURACY_WARNING=0.6
+ALERT_ACCURACY_CRITICAL=0.5
+ALERT_F1_WARNING=0.55
+ALERT_F1_CRITICAL=0.45
+```
+
+**Uso:**
+```bash
+# Las alertas se generan automáticamente durante el entrenamiento
+python main.py --train
+
+# Ver alertas recientes
+python scripts/ver_alertas.py
+
+# Ver solo alertas críticas
+python scripts/ver_alertas.py --level CRITICAL
+
+# Generar reporte
+python scripts/ver_alertas.py --report
+```
+
+**Ejemplo de alerta:**
+```
+======================================================================
+!! ALERTA: Accuracy Bajo en ASTRO LUNA
+======================================================================
+Lotería: ASTRO LUNA
+Métrica: accuracy_result
+Valor actual: 0.5800
+Umbral: 0.6000
+Mensaje: El modelo result tiene un accuracy bajo. Considere re-entrenar.
+======================================================================
+```
+
+**Características:**
+- Monitoreo automático de accuracy y F1-score
+- Múltiples niveles: INFO, WARNING, CRITICAL
+- Notificaciones por consola, archivo y email (opcional)
+- Historial completo en `logs/alerts.json`
+- Reportes estadísticos y filtros avanzados
+
+Ver [SISTEMA_ALERTAS.md](Docs/SISTEMA_ALERTAS.md) para configuración completa y uso avanzado.
 
 ---
 
@@ -360,6 +456,8 @@ python main.py --config
 
 - [ARCHITECTURE.md](Docs/ARCHITECTURE.md) — Arquitectura del sistema
 - [COMO_FUNCIONA_ENTRENAMIENTO.md](Docs/COMO_FUNCIONA_ENTRENAMIENTO.md) — Detalles del entrenamiento
+- [BATCH_PREDICTIONS.md](Docs/BATCH_PREDICTIONS.md) — Predicciones por lotes 🆕
+- [SISTEMA_ALERTAS.md](Docs/SISTEMA_ALERTAS.md) — Sistema de alertas y monitoreo 🆕
 - [ESTRATEGIA_TOP3_MODELOS.md](Docs/ESTRATEGIA_TOP3_MODELOS.md) — Sistema de protección de modelos
 - [GESTION_LOGS_ENTRENAMIENTO.md](Docs/GESTION_LOGS_ENTRENAMIENTO.md) — Gestión automática de logs
 - [LIMPIEZA_COMPLETADA.md](Docs/LIMPIEZA_COMPLETADA.md) — Historial de limpieza del proyecto
@@ -373,8 +471,10 @@ python scripts/verificar_ia_models.py
 # Analizar entrenamientos
 python scripts/visualizar_entrenamiento.py --latest
 
-# Entrenamiento avanzado de ML
-python scripts/train_advanced.py --algorithm auto
+# Ver alertas del sistema 🆕
+python scripts/ver_alertas.py
+python scripts/ver_alertas.py --level CRITICAL
+python scripts/ver_alertas.py --report
 
 # Limpiar caché manualmente
 python -m src.utils.drop_cache

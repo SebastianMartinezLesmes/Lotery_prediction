@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 from src.utils.training_visualizer import TrainingVisualizer
+from src.utils.alerts import check_model_performance
 
 ITERATIONS = 8000
 MIN_ACCURACY = 0.7
@@ -68,6 +69,14 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
         print(f"Modelos entrenados para {nombre_loteria.title()} con precision:")
         print(f"   - Result: {acc_result:.4f}")
         print(f"   - Series: {acc_series:.4f}")
+    
+    # Verificar alertas de rendimiento
+    # Obtener F1-scores del historial si están disponibles
+    f1_result = history["result_f1"][-1] if history["result_f1"] else None
+    f1_series = history["series_f1"][-1] if history["series_f1"] else None
+    
+    check_model_performance(nombre_loteria, "result", acc_result, f1_result)
+    check_model_performance(nombre_loteria, "series", acc_series, f1_series)
 
 def entrenar_modelo_result(X_train, y_train, random_state):
     modelo = RandomForestClassifier(
