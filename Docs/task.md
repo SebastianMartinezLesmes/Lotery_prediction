@@ -16,6 +16,7 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 - [x] **Feature engineering** - ✅ Implementado: temporales, festivos, lunares, lag, rolling, tendencias (40+ features)
 - [x] **Métricas de negocio** - ✅ Implementado: ROI, tasa aciertos consecutivos, confianza de predicción
 - [x] **Early stopping** - ✅ Implementado: detiene cuando no mejora en 50 iteraciones (mínimo 100)
+- [x] **Entrenamiento evolutivo** - ✅ Sistema de 3 variantes que compiten y evolucionan automáticamente 🆕
 
 ## Datos
 
