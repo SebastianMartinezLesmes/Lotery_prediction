@@ -452,12 +452,88 @@ python main.py --config
 
 ---
 
+## 🐳 Docker Deployment 🆕
+
+### Inicio Rápido con Docker
+
+```bash
+# Construir imagen
+docker build -t lottery-prediction:latest .
+
+# Ejecutar con Docker Compose
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Detener
+docker-compose down
+```
+
+### Comandos Docker Útiles
+
+```bash
+# Pipeline completo
+docker-compose run --rm lottery-system python main.py
+
+# Solo entrenamiento
+docker-compose run --rm lottery-system python main.py --train
+
+# Batch predictions
+docker-compose run --rm lottery-system python main.py --batch --days 30
+
+# Scheduler automático
+docker-compose up -d lottery-scheduler
+```
+
+Ver [DOCKER_DEPLOYMENT.md](Docs/DOCKER_DEPLOYMENT.md) para guía completa.
+
+---
+
+## ⏰ Entrenamientos Automáticos 🆕
+
+### Scheduler Integrado
+
+El sistema incluye un scheduler para ejecutar tareas automáticamente:
+
+```bash
+# Scheduler simple
+python scripts/scheduler.py --mode simple
+
+# Scheduler avanzado (APScheduler)
+python scripts/scheduler.py --mode apscheduler
+
+# Generar crontab para Linux/Mac
+python scripts/scheduler.py --mode crontab
+```
+
+### Configuración en `.env`
+
+```env
+# Expresiones cron (minuto hora dia mes dia_semana)
+SCHEDULE_COLLECT_CRON="0 8 * * *"      # Diario 8:00 AM
+SCHEDULE_TRAIN_CRON="0 2 * * 0"        # Domingos 2:00 AM
+SCHEDULE_PIPELINE_CRON="0 3 1 * *"     # Mensual día 1, 3:00 AM
+```
+
+### Tareas Programadas
+
+- **Recolección diaria**: Actualiza datos cada mañana
+- **Entrenamiento semanal**: Re-entrena modelos los domingos
+- **Pipeline mensual**: Mantenimiento completo mensual
+
+Ver [SCHEDULER.md](Docs/SCHEDULER.md) para configuración avanzada.
+
+---
+
 ## 📚 Documentación Adicional
 
 - [ARCHITECTURE.md](Docs/ARCHITECTURE.md) — Arquitectura del sistema
 - [COMO_FUNCIONA_ENTRENAMIENTO.md](Docs/COMO_FUNCIONA_ENTRENAMIENTO.md) — Detalles del entrenamiento
-- [BATCH_PREDICTIONS.md](Docs/BATCH_PREDICTIONS.md) — Predicciones por lotes 🆕
-- [SISTEMA_ALERTAS.md](Docs/SISTEMA_ALERTAS.md) — Sistema de alertas y monitoreo 🆕
+- [BATCH_PREDICTIONS.md](Docs/BATCH_PREDICTIONS.md) — Predicciones por lotes
+- [SISTEMA_ALERTAS.md](Docs/SISTEMA_ALERTAS.md) — Sistema de alertas y monitoreo
+- [DOCKER_DEPLOYMENT.md](Docs/DOCKER_DEPLOYMENT.md) — Deployment con Docker 🆕
+- [SCHEDULER.md](Docs/SCHEDULER.md) — Entrenamientos automáticos programados 🆕
 - [ESTRATEGIA_TOP3_MODELOS.md](Docs/ESTRATEGIA_TOP3_MODELOS.md) — Sistema de protección de modelos
 - [GESTION_LOGS_ENTRENAMIENTO.md](Docs/GESTION_LOGS_ENTRENAMIENTO.md) — Gestión automática de logs
 - [LIMPIEZA_COMPLETADA.md](Docs/LIMPIEZA_COMPLETADA.md) — Historial de limpieza del proyecto

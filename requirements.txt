@@ -9,3 +9,7 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 xgboost>=2.0.0
 lightgbm>=4.0.0
+
+# Scheduler dependencies (opcional)
+schedule>=1.2.0
+APScheduler>=3.10.0
