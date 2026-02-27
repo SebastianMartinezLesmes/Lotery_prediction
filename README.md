@@ -156,6 +156,27 @@ python scripts/train_advanced.py --algorithm XGBoost
 
 # Modo AUTO (prueba todos los algoritmos)
 python scripts/train_advanced.py --algorithm auto
+```
+
+### Opción 4: Entrenamiento Híbrido 🆕🔥
+
+```bash
+# Lo mejor de ambos mundos: múltiples algoritmos + evolución continua
+python scripts/train_hybrid.py
+
+# Ver estado de variantes
+python scripts/train_hybrid.py --status
+
+# Sin feature engineering (más rápido)
+python scripts/train_hybrid.py --no-features
+```
+
+**Características del Híbrido:**
+- 3 algoritmos compitiendo: RandomForest, XGBoost, LightGBM
+- Feature engineering avanzado (40+ features)
+- Evolución continua sin reiniciar
+- El mejor algoritmo siempre en producción
+python scripts/train_advanced.py --algorithm auto
 
 # Con Grid Search (más preciso)
 python scripts/train_advanced.py --search grid
