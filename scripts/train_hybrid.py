@@ -1,6 +1,10 @@
 """
-Script para entrenar modelos usando el sistema híbrido.
-Combina múltiples algoritmos (RF, XGBoost, LightGBM) con evolución continua.
+Script para entrenar modelos usando el sistema híbrido MEJORADO.
+Combina múltiples algoritmos (RF, XGBoost, LightGBM) con TODAS las mejoras de ML:
+- Features de frecuencia y patrones (números calientes/fríos)
+- Calibración de probabilidades (confianza real)
+- Optimización bayesiana (mejores hiperparámetros)
+- Evolución continua
 """
 import sys
 from pathlib import Path
@@ -17,14 +21,17 @@ from src.utils.hybrid_training import entrenar_hibrido, HybridTrainer
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Entrenamiento Híbrido - Lo Mejor de Ambos Mundos",
+        description="Entrenamiento Híbrido MEJORADO - El Mejor Sistema Disponible",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-🧬 ENTRENAMIENTO HÍBRIDO
+🚀 ENTRENAMIENTO HÍBRIDO MEJORADO
 
-Combina:
+Combina TODAS las mejoras de ML:
   ✓ Múltiples algoritmos (RandomForest, XGBoost, LightGBM)
   ✓ Feature engineering avanzado (40+ features)
+  ✓ Features de frecuencia y patrones (números calientes/fríos)
+  ✓ Calibración de probabilidades (confianza real)
+  ✓ Optimización bayesiana (mejores hiperparámetros)
   ✓ Evolución continua (3 variantes compitiendo)
   ✓ Sin reinicio (continúa desde estado guardado)
 
@@ -34,20 +41,27 @@ Variantes:
   🧪 Variante #3: LightGBM (eficiente, rápido)
 
 El mejor algoritmo siempre está en producción.
+Los modelos incluyen calibración de probabilidades.
 
 Ejemplos de uso:
 
-  # Entrenar todas las loterías
+  # Entrenar con TODAS las mejoras (recomendado)
   python scripts/train_hybrid.py
 
   # Lotería específica
   python scripts/train_hybrid.py --lottery "ASTRO LUNA"
 
-  # Sin feature engineering avanzado (más rápido)
-  python scripts/train_hybrid.py --no-features
+  # Sin calibración (más rápido)
+  python scripts/train_hybrid.py --no-calibration
 
-  # Más iteraciones
-  python scripts/train_hybrid.py --iterations 20000
+  # Sin optimización bayesiana (más rápido)
+  python scripts/train_hybrid.py --no-bayesian
+
+  # Sin features de frecuencia (más rápido)
+  python scripts/train_hybrid.py --no-frequency
+
+  # Más iteraciones de optimización bayesiana (mejor resultado)
+  python scripts/train_hybrid.py --bayesian-iter 50
 
   # Ver estado de variantes
   python scripts/train_hybrid.py --status
@@ -78,6 +92,38 @@ Ejemplos de uso:
         '--no-features',
         action='store_true',
         help='Desactivar feature engineering avanzado (más rápido)'
+    )
+    
+    parser.add_argument(
+        '--no-frequency',
+        action='store_true',
+        help='Desactivar features de frecuencia (más rápido)'
+    )
+    
+    parser.add_argument(
+        '--no-calibration',
+        action='store_true',
+        help='Desactivar calibración de probabilidades (más rápido)'
+    )
+    
+    parser.add_argument(
+        '--no-bayesian',
+        action='store_true',
+        help='Desactivar optimización bayesiana (más rápido)'
+    )
+    
+    parser.add_argument(
+        '--bayesian-iter',
+        type=int,
+        default=30,
+        help='Iteraciones de optimización bayesiana (default: 30)'
+    )
+    
+    parser.add_argument(
+        '--confidence',
+        type=float,
+        default=0.6,
+        help='Umbral de confianza para calibración (default: 0.6)'
     )
     
     parser.add_argument(
@@ -129,14 +175,24 @@ Ejemplos de uso:
         loterias = df["lottery"].str.lower().unique()
     
     use_features = not args.no_features
+    use_frequency = not args.no_frequency
+    use_calibration = not args.no_calibration
+    use_bayesian = not args.no_bayesian
     
     print(f"\n{'='*70}")
-    print(f"🧬 ENTRENAMIENTO HÍBRIDO")
+    print(f"🚀 ENTRENAMIENTO HÍBRIDO MEJORADO")
     print('='*70)
     print(f"Loterías: {list(loterias)}")
     print(f"Iteraciones máximas: {args.iterations}")
     print(f"Patience: {args.patience}")
     print(f"Feature engineering avanzado: {'✓ Activado' if use_features else '✗ Desactivado'}")
+    print(f"Features de frecuencia: {'✓ Activado' if use_frequency else '✗ Desactivado'}")
+    print(f"Calibración de probabilidades: {'✓ Activado' if use_calibration else '✗ Desactivado'}")
+    print(f"Optimización bayesiana: {'✓ Activado' if use_bayesian else '✗ Desactivado'}")
+    if use_bayesian:
+        print(f"Iteraciones bayesianas: {args.bayesian_iter}")
+    if use_calibration:
+        print(f"Umbral de confianza: {args.confidence}")
     print(f"Algoritmos: RandomForest, XGBoost, LightGBM")
     print('='*70)
     
@@ -155,19 +211,28 @@ Ejemplos de uso:
         
         print(f"Registros disponibles: {len(df_loteria)}")
         
+        # Ordenar por fecha para features de frecuencia
+        df_loteria = df_loteria.sort_values('fecha').reset_index(drop=True)
+        
         X = df_loteria[["dia", "mes", "anio", "dia_semana"]].values
         y_result = df_loteria["result"].values
         y_series = df_loteria["series"].values
         
-        # Entrenar híbridamente
+        # Entrenar híbridamente con TODAS las mejoras
         results = entrenar_hibrido(
             X=X,
             y_result=y_result,
             y_series=y_series,
             lottery_name=nombre_loteria,
+            df_original=df_loteria if use_frequency else None,
             max_iterations=args.iterations,
             patience=args.patience,
             use_advanced_features=use_features,
+            use_frequency_features=use_frequency,
+            use_calibration=use_calibration,
+            use_bayesian_optimization=use_bayesian,
+            bayesian_iterations=args.bayesian_iter,
+            confidence_threshold=args.confidence,
             verbose=True
         )
         
@@ -181,16 +246,27 @@ Ejemplos de uso:
         print(f"\n✅ Entrenamiento completado para {nombre_loteria}")
         print(f"\n   Result:")
         print(f"      Algoritmo ganador: {result_prod.algorithm}")
+        print(f"      Calibrado: {'Sí' if result_prod.is_calibrated else 'No'}")
         print(f"      Accuracy: {result_prod.accuracy:.4f}")
         print(f"      F1-Score: {result_prod.f1_score:.4f}")
         print(f"\n   Series:")
         print(f"      Algoritmo ganador: {series_prod.algorithm}")
+        print(f"      Calibrado: {'Sí' if series_prod.is_calibrated else 'No'}")
         print(f"      Accuracy: {series_prod.accuracy:.4f}")
         print(f"      F1-Score: {series_prod.f1_score:.4f}")
     
     print(f"\n{'='*70}")
-    print("🎉 ENTRENAMIENTO HÍBRIDO COMPLETADO")
+    print("🎉 ENTRENAMIENTO HÍBRIDO MEJORADO COMPLETADO")
     print('='*70)
+    print("\nMejoras aplicadas:")
+    if use_features:
+        print("  ✓ Feature engineering avanzado (40+ features)")
+    if use_frequency:
+        print("  ✓ Features de frecuencia y patrones")
+    if use_calibration:
+        print("  ✓ Calibración de probabilidades")
+    if use_bayesian:
+        print("  ✓ Optimización bayesiana")
     print("\nPara ver el estado de las variantes:")
     print("  python scripts/train_hybrid.py --status")
     print("\nPara continuar evolucionando (sin reiniciar):")
