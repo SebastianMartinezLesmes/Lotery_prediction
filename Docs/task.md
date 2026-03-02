@@ -17,6 +17,9 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 - [x] **Métricas de negocio** - ✅ Implementado: ROI, tasa aciertos consecutivos, confianza de predicción
 - [x] **Early stopping** - ✅ Implementado: detiene cuando no mejora en 50 iteraciones (mínimo 100)
 - [x] **Entrenamiento evolutivo** - ✅ Sistema de 3 variantes que compiten y evolucionan automáticamente 🆕
+- [x] **Features de frecuencia y patrones** - ✅ Números calientes/fríos, intervalos, tendencias 🆕⚡
+- [x] **Calibración de probabilidades** - ✅ Predicciones con confianza calibrada y recomendaciones 🆕⚡
+- [x] **Optimización bayesiana** - ✅ Búsqueda inteligente de hiperparámetros con scikit-optimize 🆕⚡
 
 ## Datos
 
@@ -64,9 +67,9 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 
 ## 📊 Progreso Total
 
-**Completadas: 22 de 38 tareas (58%)**
+**Completadas: 25 de 38 tareas (66%)**
 
-### ✅ Completadas (22)
+### ✅ Completadas (25)
 1. Separar configuración por entorno
 2. Manejo de errores robusto
 3. Validación de datos con Pydantic
@@ -89,7 +92,12 @@ Basándome en el análisis del código, aquí están las mejoras que podrías im
 20. Sistema de entrenamiento avanzado
 21. Batch predictions (predicciones por lotes)
 22. Sistema de alertas y notificaciones 🆕
-21. Batch predictions (predicciones por lotes) 🆕
+23. Containerización con Docker 🆕
+24. Scheduler para entrenamientos automáticos 🆕
+25. Sistema de entrenamiento híbrido 🆕
+26. Features de frecuencia y patrones 🆕⚡
+27. Calibración de probabilidades 🆕⚡
+28. Optimización bayesiana de hiperparámetros 🆕⚡
 
 ### 🔄 Mejoras Adicionales Implementadas (No en lista original)
 1. **Sistema de gestión de logs inteligente** - Mantiene Top 3 entrenamientos

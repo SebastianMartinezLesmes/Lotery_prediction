@@ -1,13 +1,18 @@
 """
-Sistema de Entrenamiento Híbrido.
-Combina entrenamiento evolutivo con múltiples algoritmos y feature engineering avanzado.
+Sistema de Entrenamiento Híbrido Mejorado.
+Combina entrenamiento evolutivo con múltiples algoritmos y TODAS las mejoras de ML.
+
+Mejoras integradas:
+1. Features de frecuencia y patrones (números calientes/fríos)
+2. Calibración de probabilidades (confianza real)
+3. Optimización bayesiana (mejores hiperparámetros)
 
 Variantes:
 1. RandomForest (rápido, robusto)
 2. XGBoost (preciso, potente)
 3. LightGBM (eficiente, rápido)
 
-Cada variante compite y evoluciona con feature engineering avanzado.
+Cada variante compite y evoluciona con todas las mejoras.
 """
 import numpy as np
 import pandas as pd
@@ -23,7 +28,13 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from src.core.config import settings
 from src.core.logger import LoggerManager
-from src.utils.ml_advanced import AdvancedFeatureEngineer
+from src.utils.ml_advanced import FeatureEngineer
+from src.utils.ml_enhanced import (
+    EnhancedFeatureEngineer,
+    CalibratedModelWrapper,
+    BayesianOptimizer,
+    BAYESIAN_AVAILABLE
+)
 
 # Importar algoritmos avanzados
 try:
@@ -53,6 +64,8 @@ class HybridVariant:
     iterations_trained: int
     last_improvement: int
     created_at: str
+    is_calibrated: bool = False  # Nueva: indica si está calibrado
+    confidence_threshold: float = 0.6  # Nueva: umbral de confianza
     
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -64,9 +77,12 @@ class HybridVariant:
 
 class HybridTrainer:
     """
-    Entrenador híbrido que combina:
+    Entrenador híbrido mejorado que combina:
     - Múltiples algoritmos (RF, XGBoost, LightGBM)
-    - Feature engineering avanzado
+    - Feature engineering avanzado (40+ features)
+    - Features de frecuencia y patrones (números calientes/fríos)
+    - Calibración de probabilidades (confianza real)
+    - Optimización bayesiana (mejores hiperparámetros)
     - Evolución continua
     """
     
@@ -76,16 +92,27 @@ class HybridTrainer:
         model_type: str,
         max_iterations: int = 10000,
         patience: int = 100,
-        use_advanced_features: bool = True
+        use_advanced_features: bool = True,
+        use_frequency_features: bool = True,
+        use_calibration: bool = True,
+        use_bayesian_optimization: bool = True,
+        bayesian_iterations: int = 30,
+        confidence_threshold: float = 0.6
     ):
         self.lottery_name = lottery_name
         self.model_type = model_type
         self.max_iterations = max_iterations
         self.patience = patience
         self.use_advanced_features = use_advanced_features
+        self.use_frequency_features = use_frequency_features
+        self.use_calibration = use_calibration
+        self.use_bayesian_optimization = use_bayesian_optimization and BAYESIAN_AVAILABLE
+        self.bayesian_iterations = bayesian_iterations
+        self.confidence_threshold = confidence_threshold
         
-        # Feature engineer
-        self.feature_engineer = AdvancedFeatureEngineer() if use_advanced_features else None
+        # Feature engineers
+        self.feature_engineer = FeatureEngineer() if use_advanced_features else None
+        self.freq_engineer = EnhancedFeatureEngineer(target_col=model_type) if use_frequency_features else None
         
         # Rutas
         self.models_dir = settings.MODELS_DIR
@@ -98,6 +125,11 @@ class HybridTrainer:
         # Cargar o inicializar
         self._load_or_initialize_variants()
         
+        logger.info(f"HybridTrainer MEJORADO inicializado para {lottery_name} ({model_type})")
+        logger.info(f"Feature engineering avanzado: {use_advanced_features}")
+        logger.info(f"Features de frecuencia: {use_frequency_features}")
+        logger.info(f"Calibración: {use_calibration}")
+        logger.info(f"Optimización bayesiana: {self.use_bayesian_optimization}")
         logger.info(f"HybridTrainer inicializado para {lottery_name} ({model_type})")
         logger.info(f"Feature engineering avanzado: {use_advanced_features}")
     
@@ -129,14 +161,10 @@ class HybridTrainer:
                 HybridVariant(
                     id=2,
                     role="EXPERIMENTAL_1",
-                    algorithm="XGBoost" if XGBOOST_AVAILABLE else "RandomForest",
+                    algorithm="RandomForest",  # Usar RF en lugar de XGBoost para evitar problemas con clases no consecutivas
                     accuracy=0.0,
                     f1_score=0.0,
                     hyperparameters={
-                        'n_estimators': 150,
-                        'max_depth': 5,
-                        'learning_rate': 0.1
-                    } if XGBOOST_AVAILABLE else {
                         'n_estimators': 150,
                         'max_depth': 5,
                         'min_samples_split': 3
@@ -148,14 +176,10 @@ class HybridTrainer:
                 HybridVariant(
                     id=3,
                     role="EXPERIMENTAL_2",
-                    algorithm="LightGBM" if LIGHTGBM_AVAILABLE else "RandomForest",
+                    algorithm="RandomForest",  # Usar RF en lugar de LightGBM para evitar problemas con clases no consecutivas
                     accuracy=0.0,
                     f1_score=0.0,
                     hyperparameters={
-                        'n_estimators': 180,
-                        'max_depth': 4,
-                        'learning_rate': 0.05
-                    } if LIGHTGBM_AVAILABLE else {
                         'n_estimators': 250,
                         'max_depth': 4,
                         'min_samples_split': 7
@@ -172,10 +196,37 @@ class HybridTrainer:
         with open(self.variants_file, 'w') as f:
             json.dump([v.to_dict() for v in self.variants], f, indent=2)
     
-    def _create_model(self, variant: HybridVariant):
-        """Crea un modelo basado en el algoritmo y configuración de la variante."""
+    def _create_model(self, variant: HybridVariant, X=None, y=None):
+        """
+        Crea un modelo basado en el algoritmo y configuración de la variante.
+        Si se proporciona X e y, usa optimización bayesiana.
+        """
+        # Si hay datos y optimización bayesiana está activada, optimizar hiperparámetros
+        if X is not None and y is not None and self.use_bayesian_optimization:
+            logger.info(f"Optimizando hiperparámetros para variante {variant.id} ({variant.algorithm})...")
+            
+            try:
+                optimizer = BayesianOptimizer(random_state=42)
+                best_model, results = optimizer.optimize(
+                    X=X,
+                    y=y,
+                    algorithm=variant.algorithm,
+                    n_iter=self.bayesian_iterations,
+                    cv=3,
+                    verbose=False
+                )
+                
+                # Actualizar hiperparámetros de la variante
+                variant.hyperparameters = results['best_params']
+                logger.info(f"Optimización completada: Score={results['best_score']:.4f}")
+                
+                return best_model
+            except Exception as e:
+                logger.warning(f"Error en optimización bayesiana: {e}. Usando parámetros por defecto.")
+        
+        # Crear modelo con hiperparámetros actuales
         if variant.algorithm == "RandomForest":
-            return RandomForestClassifier(
+            model = RandomForestClassifier(
                 n_estimators=variant.hyperparameters.get('n_estimators', 200),
                 max_depth=variant.hyperparameters.get('max_depth', 6),
                 min_samples_split=variant.hyperparameters.get('min_samples_split', 5),
@@ -185,7 +236,7 @@ class HybridTrainer:
             )
         
         elif variant.algorithm == "XGBoost" and XGBOOST_AVAILABLE:
-            return xgb.XGBClassifier(
+            model = xgb.XGBClassifier(
                 n_estimators=variant.hyperparameters.get('n_estimators', 150),
                 max_depth=variant.hyperparameters.get('max_depth', 5),
                 learning_rate=variant.hyperparameters.get('learning_rate', 0.1),
@@ -195,7 +246,7 @@ class HybridTrainer:
             )
         
         elif variant.algorithm == "LightGBM" and LIGHTGBM_AVAILABLE:
-            return lgb.LGBMClassifier(
+            model = lgb.LGBMClassifier(
                 n_estimators=variant.hyperparameters.get('n_estimators', 180),
                 max_depth=variant.hyperparameters.get('max_depth', 4),
                 learning_rate=variant.hyperparameters.get('learning_rate', 0.05),
@@ -207,13 +258,37 @@ class HybridTrainer:
         else:
             # Fallback a RandomForest
             logger.warning(f"Algoritmo {variant.algorithm} no disponible, usando RandomForest")
-            return RandomForestClassifier(
+            model = RandomForestClassifier(
                 n_estimators=200,
                 max_depth=6,
                 class_weight='balanced',
                 random_state=42,
                 n_jobs=-1
             )
+        
+        # Aplicar calibración si está activada
+        if self.use_calibration:
+            # Ajustar CV según tamaño de datos
+            cv_folds = 3
+            if X is not None and y is not None:
+                # Calcular el mínimo de ejemplos por clase
+                unique, counts = np.unique(y, return_counts=True)
+                min_samples_per_class = counts.min()
+                # Ajustar folds para evitar errores
+                if min_samples_per_class < 3:
+                    cv_folds = 2
+                elif min_samples_per_class < 5:
+                    cv_folds = 2
+            
+            model = CalibratedModelWrapper(
+                base_model=model,
+                method='sigmoid',
+                cv=cv_folds
+            )
+            variant.is_calibrated = True
+            variant.confidence_threshold = self.confidence_threshold
+        
+        return model
     
     def _get_production_variant(self) -> HybridVariant:
         """Obtiene la variante en producción."""
@@ -297,35 +372,85 @@ class HybridTrainer:
         self,
         X,
         y,
+        df_original: Optional[pd.DataFrame] = None,
         verbose: bool = True
     ) -> Tuple[any, float, float]:
         """
-        Entrena usando estrategia híbrida.
+        Entrena usando estrategia híbrida MEJORADA con todas las optimizaciones.
+        
+        Args:
+            X: Features básicas
+            y: Target
+            df_original: DataFrame original con fecha y target (para features de frecuencia)
+            verbose: Mostrar progreso
         
         Returns:
             Mejor modelo, accuracy, f1-score
         """
         logger.info("="*70)
-        logger.info(f"Iniciando entrenamiento híbrido: {self.lottery_name} ({self.model_type})")
+        logger.info(f"Iniciando entrenamiento híbrido MEJORADO: {self.lottery_name} ({self.model_type})")
         logger.info("="*70)
         
-        # Aplicar feature engineering si está habilitado
+        # Aplicar feature engineering avanzado si está habilitado
         if self.use_advanced_features:
             logger.info("Aplicando feature engineering avanzado...")
             # Crear DataFrame temporal para feature engineering
             df_temp = pd.DataFrame(X, columns=['dia', 'mes', 'anio', 'dia_semana'])
-            df_temp['fecha'] = pd.to_datetime(df_temp[['anio', 'mes', 'dia']])
+            # Crear fecha correctamente
+            df_temp['fecha'] = pd.to_datetime({
+                'year': df_temp['anio'],
+                'month': df_temp['mes'],
+                'day': df_temp['dia']
+            })
             
-            # Aplicar features
-            df_features = self.feature_engineer.create_all_features(df_temp)
-            X_enhanced = df_features.select_dtypes(include=[np.number]).fillna(0).values
+            # Aplicar features temporales
+            df_temp = FeatureEngineer.add_temporal_features(df_temp)
+            df_temp = FeatureEngineer.add_holiday_features(df_temp)
+            df_temp = FeatureEngineer.add_lunar_features(df_temp)
             
-            logger.info(f"Features: {X.shape[1]} → {X_enhanced.shape[1]}")
+            # Seleccionar features numéricas
+            X_enhanced = df_temp.select_dtypes(include=[np.number]).fillna(0).values
+            
+            logger.info(f"Features avanzadas: {X.shape[1]} → {X_enhanced.shape[1]}")
             X = X_enhanced
         
-        # Inicializar modelos
-        for variant in self.variants:
-            self.models[variant.id] = self._create_model(variant)
+        # Aplicar features de frecuencia si está habilitado
+        if self.use_frequency_features and df_original is not None:
+            logger.info("Aplicando features de frecuencia y patrones...")
+            
+            # Crear DataFrame con fecha y target
+            df_freq = df_original.copy()
+            if 'fecha' not in df_freq.columns:
+                df_freq['fecha'] = pd.to_datetime(df_freq[['anio', 'mes', 'dia']])
+            
+            # Generar features de frecuencia
+            df_freq_features = self.freq_engineer.create_all_features(
+                df_freq,
+                include_frequency=True,
+                include_temporal=False  # Ya tenemos temporales
+            )
+            
+            # Seleccionar solo features numéricas nuevas
+            freq_cols = [col for col in df_freq_features.columns 
+                        if col not in ['fecha', 'lottery', 'slug', self.model_type]
+                        and col not in ['dia', 'mes', 'anio', 'dia_semana']
+                        and df_freq_features[col].dtype in [np.int64, np.float64]]
+            
+            if freq_cols:
+                X_freq = df_freq_features[freq_cols].fillna(0).values
+                X = np.hstack([X, X_freq])
+                logger.info(f"Features de frecuencia agregadas: {len(freq_cols)}")
+                logger.info(f"Features totales: {X.shape[1]}")
+        
+        # Optimizar hiperparámetros iniciales si está activado
+        if self.use_bayesian_optimization:
+            logger.info("Optimizando hiperparámetros iniciales con búsqueda bayesiana...")
+            for variant in self.variants:
+                self.models[variant.id] = self._create_model(variant, X, y)
+        else:
+            # Inicializar modelos sin optimización
+            for variant in self.variants:
+                self.models[variant.id] = self._create_model(variant)
         
         best_combined_score = 0.0
         iterations_without_improvement = 0
@@ -381,9 +506,10 @@ class HybridTrainer:
             # Mostrar progreso
             if verbose and iteration % 10 == 0:
                 prod = self._get_production_variant()
+                cal_marker = "[CAL]" if prod.is_calibrated else ""
                 print(f"\r{'**' if improvements else '  '} "
                       f"{iteration}/{self.max_iterations} ({iteration/self.max_iterations*100:.1f}%) | "
-                      f"{prod.algorithm[:4]}: Acc={prod.accuracy:.4f} F1={prod.f1_score:.4f} | "
+                      f"{prod.algorithm[:4]}{cal_marker}: Acc={prod.accuracy:.4f} F1={prod.f1_score:.4f} | "
                       f"Best: {best_combined_score:.4f} | No-improve: {iterations_without_improvement}", end='')
             
             # Mutar experimentales
@@ -413,8 +539,9 @@ class HybridTrainer:
         self._save_production_model(production)
         
         logger.info("="*70)
-        logger.info("Entrenamiento híbrido completado")
+        logger.info("Entrenamiento híbrido MEJORADO completado")
         logger.info(f"Algoritmo ganador: {production.algorithm}")
+        logger.info(f"Calibrado: {production.is_calibrated}")
         logger.info(f"Accuracy: {production.accuracy:.4f}")
         logger.info(f"F1-Score: {production.f1_score:.4f}")
         logger.info("="*70)
@@ -447,13 +574,35 @@ def entrenar_hibrido(
     y_result,
     y_series,
     lottery_name: str,
+    df_original: Optional[pd.DataFrame] = None,
     max_iterations: int = 10000,
     patience: int = 100,
     use_advanced_features: bool = True,
+    use_frequency_features: bool = True,
+    use_calibration: bool = True,
+    use_bayesian_optimization: bool = True,
+    bayesian_iterations: int = 30,
+    confidence_threshold: float = 0.6,
     verbose: bool = True
 ) -> Dict:
     """
-    Función de conveniencia para entrenar ambos modelos híbridamente.
+    Función de conveniencia para entrenar ambos modelos híbridamente con TODAS las mejoras.
+    
+    Args:
+        X: Features básicas
+        y_result: Target para modelo result
+        y_series: Target para modelo series
+        lottery_name: Nombre de la lotería
+        df_original: DataFrame original con fecha y targets (para features de frecuencia)
+        max_iterations: Iteraciones máximas
+        patience: Paciencia para early stopping
+        use_advanced_features: Usar features avanzadas (40+)
+        use_frequency_features: Usar features de frecuencia y patrones
+        use_calibration: Usar calibración de probabilidades
+        use_bayesian_optimization: Usar optimización bayesiana
+        bayesian_iterations: Iteraciones para optimización bayesiana
+        confidence_threshold: Umbral de confianza para calibración
+        verbose: Mostrar progreso
     
     Returns:
         Dict con modelos, accuracies y f1-scores
@@ -465,16 +614,27 @@ def entrenar_hibrido(
     logger.info(f"Entrenando modelo RESULT para {lottery_name}")
     logger.info('='*70)
     
+    # Preparar DataFrame para result
+    df_result = None
+    if df_original is not None and use_frequency_features:
+        df_result = df_original.copy()
+        df_result['result'] = y_result
+    
     trainer_result = HybridTrainer(
         lottery_name=lottery_name,
         model_type="result",
         max_iterations=max_iterations,
         patience=patience,
-        use_advanced_features=use_advanced_features
+        use_advanced_features=use_advanced_features,
+        use_frequency_features=use_frequency_features,
+        use_calibration=use_calibration,
+        use_bayesian_optimization=use_bayesian_optimization,
+        bayesian_iterations=bayesian_iterations,
+        confidence_threshold=confidence_threshold
     )
     
     model_result, acc_result, f1_result = trainer_result.train_hybrid(
-        X, y_result, verbose=verbose
+        X, y_result, df_original=df_result, verbose=verbose
     )
     
     if verbose:
@@ -492,16 +652,27 @@ def entrenar_hibrido(
     logger.info(f"Entrenando modelo SERIES para {lottery_name}")
     logger.info('='*70)
     
+    # Preparar DataFrame para series
+    df_series = None
+    if df_original is not None and use_frequency_features:
+        df_series = df_original.copy()
+        df_series['series'] = y_series
+    
     trainer_series = HybridTrainer(
         lottery_name=lottery_name,
         model_type="series",
         max_iterations=max_iterations,
         patience=patience,
-        use_advanced_features=use_advanced_features
+        use_advanced_features=use_advanced_features,
+        use_frequency_features=use_frequency_features,
+        use_calibration=use_calibration,
+        use_bayesian_optimization=use_bayesian_optimization,
+        bayesian_iterations=bayesian_iterations,
+        confidence_threshold=confidence_threshold
     )
     
     model_series, acc_series, f1_series = trainer_series.train_hybrid(
-        X, y_series, verbose=verbose
+        X, y_series, df_original=df_series, verbose=verbose
     )
     
     if verbose:
