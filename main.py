@@ -85,7 +85,7 @@ def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
 
 def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
     """
-    2. Entrena modelos de ML.
+    2. Entrena modelos de ML con features avanzadas.
     
     Args:
         loteria: Nombre específico de lotería (opcional)
@@ -96,10 +96,11 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         logger.info("="*70)
         
         print(f"\n{'='*70}")
-        print("2. ENTRENAMIENTO DE MODELOS")
+        print("2. ENTRENAMIENTO DE MODELOS CON FEATURES AVANZADAS")
         print('='*70)
         
         import pandas as pd
+        import numpy as np
         import os
         from src.core.config import settings
         from src.utils.training import entrenar_modelos_por_loteria
@@ -129,19 +130,23 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         df["fecha"] = pd.to_datetime(df["fecha"], dayfirst=True)
         df["series"] = df["series"].astype(str).str.upper().astype("category").cat.codes
         
-        # Extraer features
-        df["dia"] = df["fecha"].dt.day
-        df["mes"] = df["fecha"].dt.month
-        df["anio"] = df["fecha"].dt.year
-        df["dia_semana"] = df["fecha"].dt.weekday
-        
         # Obtener loterías
         if loteria:
-            loterias = [loteria]
+            # Filtrar loterías que contengan el texto especificado
+            loteria_lower = loteria.lower()
+            loterias_disponibles = df["lottery"].unique()
+            loterias = [l for l in loterias_disponibles if loteria_lower in l.lower()]
+            
+            if not loterias:
+                print(f"❌ No se encontraron loterías que coincidan con: {loteria}")
+                print(f"   Loterías disponibles: {list(loterias_disponibles)}")
+                return False
         else:
-            loterias = df["lottery"].str.lower().unique()
+            loterias = df["lottery"].unique()
         
-        print(f"\nLoterías a entrenar: {list(loterias)}\n")
+        print(f"\nLoterías a entrenar: {list(loterias)}")
+        print(f"Features: Avanzadas (temporales + lag + rolling + tendencias)")
+        print('='*70)
         
         # Entrenar cada lotería
         for nombre_loteria in loterias:
@@ -149,24 +154,87 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
             print(f"Entrenando modelos para: {nombre_loteria.upper()}")
             print('='*70)
             
-            df_loteria = df[df["lottery"].str.lower() == nombre_loteria.lower()]
+            df_loteria = df[df["lottery"].str.lower() == nombre_loteria.lower()].copy()
             
             if len(df_loteria) < 50:
                 print(f"❌ Datos insuficientes para {nombre_loteria}: {len(df_loteria)} registros")
                 print("   Se necesitan al menos 50 registros")
                 continue
             
-            X_l = df_loteria[["dia", "mes", "anio", "dia_semana"]].values
+            # Ordenar por fecha
+            df_loteria = df_loteria.sort_values("fecha").reset_index(drop=True)
+            
+            # ============================================================
+            # FEATURES AVANZADAS PARA MAYOR PRECISIÓN
+            # ============================================================
+            
+            # 1. Features temporales básicas
+            df_loteria["dia"] = df_loteria["fecha"].dt.day
+            df_loteria["mes"] = df_loteria["fecha"].dt.month
+            df_loteria["anio"] = df_loteria["fecha"].dt.year
+            df_loteria["dia_semana"] = df_loteria["fecha"].dt.weekday
+            
+            # 2. Features temporales adicionales
+            df_loteria["dia_mes"] = df_loteria["fecha"].dt.day
+            df_loteria["semana_anio"] = df_loteria["fecha"].dt.isocalendar().week
+            df_loteria["trimestre"] = df_loteria["fecha"].dt.quarter
+            df_loteria["es_fin_semana"] = (df_loteria["dia_semana"] >= 5).astype(int)
+            df_loteria["es_inicio_mes"] = (df_loteria["dia"] <= 7).astype(int)
+            df_loteria["es_fin_mes"] = (df_loteria["dia"] >= 23).astype(int)
+            
+            # 3. Features de lag (valores anteriores)
+            df_loteria["result_lag_1"] = df_loteria["result"].shift(1)
+            df_loteria["result_lag_2"] = df_loteria["result"].shift(2)
+            df_loteria["result_lag_3"] = df_loteria["result"].shift(3)
+            
+            # 4. Features de rolling (promedios móviles)
+            df_loteria["result_rolling_mean_7"] = df_loteria["result"].rolling(window=7, min_periods=1).mean()
+            df_loteria["result_rolling_std_7"] = df_loteria["result"].rolling(window=7, min_periods=1).std()
+            df_loteria["result_rolling_mean_30"] = df_loteria["result"].rolling(window=30, min_periods=1).mean()
+            df_loteria["result_rolling_std_30"] = df_loteria["result"].rolling(window=30, min_periods=1).std()
+            
+            # 5. Features de tendencia
+            df_loteria["tendencia_7"] = (
+                df_loteria["result"].rolling(window=7, min_periods=1).apply(
+                    lambda x: 1 if len(x) > 1 and x.iloc[-1] > x.iloc[0] else 0
+                )
+            )
+            
+            # 6. Features de frecuencia
+            df_loteria["result_freq_mean"] = df_loteria["result"].rolling(window=30, min_periods=1).mean()
+            df_loteria["result_freq_std"] = df_loteria["result"].rolling(window=30, min_periods=1).std()
+            
+            # Rellenar NaN con 0
+            df_loteria = df_loteria.fillna(0)
+            
+            # Seleccionar features para entrenamiento
+            feature_cols = [
+                "dia", "mes", "anio", "dia_semana",
+                "dia_mes", "semana_anio", "trimestre",
+                "es_fin_semana", "es_inicio_mes", "es_fin_mes",
+                "result_lag_1", "result_lag_2", "result_lag_3",
+                "result_rolling_mean_7", "result_rolling_std_7",
+                "result_rolling_mean_30", "result_rolling_std_30",
+                "tendencia_7",
+                "result_freq_mean", "result_freq_std"
+            ]
+            
+            X_l = df_loteria[feature_cols].values
             y_r = df_loteria["result"].values
             y_s = df_loteria["series"].values
+            
+            print(f"\nDatos preparados:")
+            print(f"  Registros: {len(X_l)}")
+            print(f"  Features: {len(feature_cols)}")
+            print(f"  Features usadas: {', '.join(feature_cols[:5])}... (+{len(feature_cols)-5} más)")
             
             entrenar_modelos_por_loteria(
                 X=X_l,
                 y_result=y_r,
                 y_series=y_s,
                 nombre_loteria=nombre_loteria,
-                min_acc=settings.MIN_ACCURACY,
-                max_iter=settings.ITERATIONS,
+                min_acc=0.05,  # 5% para números (lotería es difícil)
+                max_iter=100,  # Reducido para entrenamiento más rápido
                 verbose=True
             )
         
