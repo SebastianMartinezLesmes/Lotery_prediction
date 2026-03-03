@@ -1,16 +1,15 @@
 import os
 import time
 import warnings
+import json
 from datetime import datetime
 import pandas as pd
 import joblib
 import numpy as np
 
-from src.utils.result import guardar_resultado
 from src.excel.read_excel import obtener_loterias_disponibles
 from openpyxl import load_workbook
 from src.core.config import settings
-from src.utils.zodiaco import obtener_zodiaco
 from src.utils.training import entrenar_modelos_por_loteria
 
 ARCHIVO_EXCEL = str(settings.get_excel_path())
@@ -18,6 +17,54 @@ TIEMPOS_LOG = str(settings.LOGS_DIR / "tiempos.log")
 CARPETA_MODELOS = str(settings.MODELS_DIR)
 
 warnings.filterwarnings("ignore")
+
+# Mapeo de códigos a signos zodiacales
+ZODIACO = [
+    "ARI", "TAU", "GEM", "CAN",
+    "LEO", "VIR", "LIB", "ESC",
+    "SAG", "CAP", "ACU", "PIS"
+]
+
+def obtener_zodiaco(codigo):
+    """Convierte código numérico a signo zodiacal (abreviación de 3 letras)."""
+    try:
+        return ZODIACO[int(codigo)]
+    except:
+        return str(codigo)
+
+
+def guardar_resultado(prediccion, modelo_usado=None, confianza=None):
+    """
+    Guarda la predicción en formato JSON dentro de data/results.json
+    
+    Args:
+        prediccion: El resultado predicho (dict o str)
+        modelo_usado: El modelo que generó la predicción
+        confianza: Nivel de confianza (si aplica)
+    """
+    data_dir = settings.DATA_DIR
+    output_file = data_dir / "results.json"
+    
+    entrada = {
+        "timestamp": datetime.now().isoformat(),
+        "resultado": prediccion,
+        "modelo": modelo_usado,
+        "confianza": confianza
+    }
+    
+    # Leer resultados anteriores si existen
+    datos = []
+    if output_file.exists():
+        try:
+            with open(output_file, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+        except json.JSONDecodeError:
+            pass
+    
+    datos.append(entrada)
+    
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(datos, f, indent=4, ensure_ascii=False)
 
 
 def cargar_datos_excel():

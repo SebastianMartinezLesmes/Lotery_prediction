@@ -78,26 +78,52 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
     check_model_performance(nombre_loteria, "result", acc_result, f1_result)
     check_model_performance(nombre_loteria, "series", acc_series, f1_series)
 
-def entrenar_modelo_result(X_train, y_train, random_state):
-    modelo = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=4,
-        min_samples_split=5,
-        class_weight='balanced',
-        random_state=random_state
-    )
-    modelo.fit(X_train, y_train)
+def entrenar_modelo_result(X_train, y_train, random_state, warm_start_model=None):
+    """
+    Entrena modelo para predecir números.
+    Si se proporciona warm_start_model, continúa desde ese modelo.
+    """
+    if warm_start_model is not None:
+        # Usar el modelo existente como base y agregar más árboles
+        modelo = warm_start_model
+        modelo.n_estimators += 50  # Agregar 50 árboles más
+        modelo.warm_start = True
+        modelo.fit(X_train, y_train)
+        modelo.warm_start = False  # Desactivar para futuras predicciones
+    else:
+        # Crear modelo nuevo
+        modelo = RandomForestClassifier(
+            n_estimators=200,
+            max_depth=4,
+            min_samples_split=5,
+            class_weight='balanced',
+            random_state=random_state
+        )
+        modelo.fit(X_train, y_train)
     return modelo
 
-def entrenar_modelo_series(X_train, y_train):
-    modelo = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=10,
-        min_samples_split=5,
-        class_weight='balanced',
-        random_state=42
-    )
-    modelo.fit(X_train, y_train)
+def entrenar_modelo_series(X_train, y_train, warm_start_model=None):
+    """
+    Entrena modelo para predecir signos zodiacales.
+    Si se proporciona warm_start_model, continúa desde ese modelo.
+    """
+    if warm_start_model is not None:
+        # Usar el modelo existente como base y agregar más árboles
+        modelo = warm_start_model
+        modelo.n_estimators += 50  # Agregar 50 árboles más
+        modelo.warm_start = True
+        modelo.fit(X_train, y_train)
+        modelo.warm_start = False  # Desactivar para futuras predicciones
+    else:
+        # Crear modelo nuevo
+        modelo = RandomForestClassifier(
+            n_estimators=200,
+            max_depth=10,
+            min_samples_split=5,
+            class_weight='balanced',
+            random_state=42
+        )
+        modelo.fit(X_train, y_train)
     return modelo
 
 def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERATIONS, verbose=False,
@@ -129,17 +155,23 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERA
 
     # Intentar cargar modelos previos si existen
     modelos_cargados = False
+    modelo_base_result = None
+    modelo_base_series = None
+    
     if save_models:
         if modelo_result_path and os.path.exists(modelo_result_path):
             try:
                 modelo_cargado = joblib.load(modelo_result_path)
+                # Evaluar en todo el dataset para obtener baseline
                 pred = modelo_cargado.predict(X)
                 acc = accuracy_score(y_result, pred)
                 mejor_modelo_result = modelo_cargado
                 mejor_acc_result = acc
+                modelo_base_result = modelo_cargado  # Guardar para warm start
                 modelos_cargados = True
                 if verbose:
-                    print(f"Modelo Result cargado con precision previa: {acc:.4f}")
+                    print(f"✓ Modelo Result cargado (baseline: {acc:.4f})")
+                    print(f"  Continuará entrenando desde este modelo...")
             except Exception as e:
                 if verbose:
                     print(f"⚠️ Error al cargar modelo_result: {e}")
@@ -151,9 +183,11 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERA
                 acc = accuracy_score(y_series, pred)
                 mejor_modelo_series = modelo_cargado
                 mejor_acc_series = acc
+                modelo_base_series = modelo_cargado  # Guardar para warm start
                 modelos_cargados = True
                 if verbose:
-                    print(f"Modelo Series cargado con precision previa: {acc:.4f}")
+                    print(f"✓ Modelo Series cargado (baseline: {acc:.4f})")
+                    print(f"  Continuará entrenando desde este modelo...")
             except Exception as e:
                 if verbose:
                     print(f"⚠️ Error al cargar modelo_series: {e}")
@@ -161,11 +195,10 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERA
     # Si ambos modelos ya superan el umbral, informar y continuar
     if modelos_cargados and mejor_acc_result >= min_acc and mejor_acc_series >= min_acc:
         if verbose:
-            print(f"\nLos modelos existentes ya superan el umbral:")
-            print(f"   Result: {mejor_acc_result:.4f} >= {min_acc}")
-            print(f"   Series: {mejor_acc_series:.4f} >= {min_acc}")
-            print(f"\n   Continuando entrenamiento para intentar mejorar...")
-            print(f"   (Se entrenaran {max_iter} iteraciones buscando mejoras)\n")
+            print(f"\n✓ Modelos existentes superan el umbral:")
+            print(f"  Result: {mejor_acc_result:.4f} >= {min_acc}")
+            print(f"  Series: {mejor_acc_series:.4f} >= {min_acc}")
+            print(f"\n  Entrenando {max_iter} iteraciones para mejorar...\n")
 
     # Iterar entrenamientos
     for intento in range(1, max_iter + 1):
@@ -176,8 +209,8 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERA
         _, _, y_train_series, y_test_series = train_test_split(
             X, y_series, test_size=0.2, random_state=random_state)
 
-        modelo_result = entrenar_modelo_result(X_train, y_train_result, random_state)
-        modelo_series = entrenar_modelo_series(X_train, y_train_series)
+        modelo_result = entrenar_modelo_result(X_train, y_train_result, random_state, warm_start_model=modelo_base_result)
+        modelo_series = entrenar_modelo_series(X_train, y_train_series, warm_start_model=modelo_base_series)
 
         acc_result, f1_result = evaluar_y_reportar(modelo_result, X_test, y_test_result, "Result", verbose=False)
         acc_series, f1_series = evaluar_y_reportar(modelo_series, X_test, y_test_series, "Series", verbose=False)
