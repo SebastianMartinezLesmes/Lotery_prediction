@@ -26,7 +26,20 @@ from datetime import datetime
 
 from src.core.config import settings
 from src.utils.ml_enhanced import EnhancedFeatureEngineer
-from src.utils.zodiaco import obtener_zodiaco
+
+# Mapeo de códigos a signos zodiacales
+ZODIACO = [
+    "ARI", "TAU", "GEM", "CAN",
+    "LEO", "VIR", "LIB", "ESC",
+    "SAG", "CAP", "ACU", "PIS"
+]
+
+def obtener_zodiaco(codigo):
+    """Convierte código numérico a signo zodiacal (abreviación de 3 letras)."""
+    try:
+        return ZODIACO[int(codigo)]
+    except:
+        return str(codigo)
 
 
 def main():
