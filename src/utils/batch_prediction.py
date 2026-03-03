@@ -12,9 +12,22 @@ from pathlib import Path
 
 from src.core.config import settings
 from src.core.logger import get_logger
-from src.utils.zodiaco import obtener_zodiaco
 
 logger = get_logger(__name__)
+
+# Mapeo de códigos a signos zodiacales
+ZODIACO = [
+    "ARI", "TAU", "GEM", "CAN",
+    "LEO", "VIR", "LIB", "ESC",
+    "SAG", "CAP", "ACU", "PIS"
+]
+
+def obtener_zodiaco(codigo):
+    """Convierte código numérico a signo zodiacal (abreviación de 3 letras)."""
+    try:
+        return ZODIACO[int(codigo)]
+    except:
+        return str(codigo)
 
 
 class BatchPredictor:

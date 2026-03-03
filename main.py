@@ -12,45 +12,95 @@ from src.core.config import settings
 logger = get_main_logger()
 
 
-def ejecutar_dependencias() -> bool:
-    """Instala/verifica dependencias del sistema."""
-    from src.utils import dependencies
+def ejecutar_limpieza() -> bool:
+    """4. Limpia archivos de caché de Python."""
     try:
-        logger.info("Verificando dependencias...")
-        # Aquí iría la lógica de dependencies
-        print("✅ Dependencias verificadas")
+        logger.info("="*70)
+        logger.info("4. LIMPIEZA DE CACHE")
+        logger.info("="*70)
+        
+        print(f"\n{'='*70}")
+        print("4. LIMPIEZA DE CACHE")
+        print('='*70)
+        
+        from src.utils.drop_cache import main as drop_cache_main
+        drop_cache_main()
+        
+        print("\n✅ Limpieza completada")
         return True
     except Exception as e:
-        logger.error(f"Error en dependencias: {e}")
+        logger.error(f"Error en limpieza: {e}")
+        print(f"\n❌ Error: {e}")
         return False
 
 
-def ejecutar_recoleccion() -> bool:
-    """Recolecta datos desde Excel/API."""
+def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
+    """
+    1. Actualizar datos desde SuperAstro.
+    
+    Args:
+        filtro_loteria: Filtro para loterías (ej: "astro", "luna", "sol")
+    """
     try:
-        logger.info("Iniciando recolección de datos...")
-        from src.excel.read_excel import obtener_loterias_disponibles
+        logger.info("="*70)
+        logger.info("1. ACTUALIZACIÓN DE DATOS DESDE SUPERASTRO")
+        logger.info("="*70)
         
-        loterias = obtener_loterias_disponibles()
-        print(f"✅ Datos recolectados: {len(loterias)} loterías")
+        from src.api.superastro_scraper import SuperAstroScraper
+        
+        excel_path = settings.get_excel_path()
+        
+        print(f"\n{'='*70}")
+        print("1. ACTUALIZACIÓN DE DATOS")
+        print('='*70)
+        print(f"Fuente: SuperAstro (sitio oficial)")
+        print(f"Archivo: {excel_path}")
+        if filtro_loteria:
+            print(f"Filtro: {filtro_loteria}")
+        print('='*70)
+        
+        # Crear scraper
+        scraper = SuperAstroScraper(delay_entre_requests=1.0)
+        
+        # Actualizar loterías
+        df_nuevos = scraper.actualizar_todas_loterias(
+            str(excel_path),
+            filtro=filtro_loteria
+        )
+        
+        # Guardar resultados
+        if not df_nuevos.empty:
+            scraper.guardar_resultados(df_nuevos, str(excel_path))
+            print(f"\n✅ Actualización completada: {len(df_nuevos)} resultados nuevos")
+        else:
+            print("\n✅ No hay resultados nuevos. Los datos están actualizados.")
+        
         return True
+        
     except Exception as e:
-        logger.error(f"Error en recolección: {e}")
-        print(f"❌ Error: {e}")
+        logger.error(f"Error en actualización: {e}")
+        print(f"\n❌ Error: {e}")
         return False
 
 
 def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
     """
-    Entrena modelos de ML.
+    2. Entrena modelos de ML con features avanzadas.
     
     Args:
         loteria: Nombre específico de lotería (opcional)
     """
     try:
-        logger.info(f"Iniciando entrenamiento{f' para {loteria}' if loteria else ''}...")
+        logger.info("="*70)
+        logger.info("2. ENTRENAMIENTO DE MODELOS")
+        logger.info("="*70)
+        
+        print(f"\n{'='*70}")
+        print("2. ENTRENAMIENTO DE MODELOS CON FEATURES AVANZADAS")
+        print('='*70)
         
         import pandas as pd
+        import numpy as np
         import os
         from src.core.config import settings
         from src.utils.training import entrenar_modelos_por_loteria
@@ -59,8 +109,8 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         ruta_excel = settings.get_excel_path()
         
         if not os.path.exists(ruta_excel):
-            print(f"Archivo no encontrado: {ruta_excel}")
-            print("   Ejecuta primero: python main.py --collect")
+            print(f"❌ Archivo no encontrado: {ruta_excel}")
+            print("   Ejecuta primero: python main.py --actualizar")
             return False
         
         print(f"Leyendo datos desde: {ruta_excel}")
@@ -71,7 +121,7 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         # Validar columnas
         columnas_necesarias = {"fecha", "lottery", "result", "series"}
         if not columnas_necesarias.issubset(df.columns):
-            print(f"Faltan columnas necesarias: {columnas_necesarias - set(df.columns)}")
+            print(f"❌ Faltan columnas necesarias: {columnas_necesarias - set(df.columns)}")
             return False
         
         # Preprocesar
@@ -80,19 +130,23 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         df["fecha"] = pd.to_datetime(df["fecha"], dayfirst=True)
         df["series"] = df["series"].astype(str).str.upper().astype("category").cat.codes
         
-        # Extraer features
-        df["dia"] = df["fecha"].dt.day
-        df["mes"] = df["fecha"].dt.month
-        df["anio"] = df["fecha"].dt.year
-        df["dia_semana"] = df["fecha"].dt.weekday
-        
         # Obtener loterías
         if loteria:
-            loterias = [loteria]
+            # Filtrar loterías que contengan el texto especificado
+            loteria_lower = loteria.lower()
+            loterias_disponibles = df["lottery"].unique()
+            loterias = [l for l in loterias_disponibles if loteria_lower in l.lower()]
+            
+            if not loterias:
+                print(f"❌ No se encontraron loterías que coincidan con: {loteria}")
+                print(f"   Loterías disponibles: {list(loterias_disponibles)}")
+                return False
         else:
-            loterias = df["lottery"].str.lower().unique()
+            loterias = df["lottery"].unique()
         
-        print(f"\nLoterias a entrenar: {list(loterias)}\n")
+        print(f"\nLoterías a entrenar: {list(loterias)}")
+        print(f"Features: Avanzadas (temporales + lag + rolling + tendencias)")
+        print('='*70)
         
         # Entrenar cada lotería
         for nombre_loteria in loterias:
@@ -100,35 +154,98 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
             print(f"Entrenando modelos para: {nombre_loteria.upper()}")
             print('='*70)
             
-            df_loteria = df[df["lottery"].str.lower() == nombre_loteria.lower()]
+            df_loteria = df[df["lottery"].str.lower() == nombre_loteria.lower()].copy()
             
             if len(df_loteria) < 50:
-                print(f"Datos insuficientes para {nombre_loteria}: {len(df_loteria)} registros")
+                print(f"❌ Datos insuficientes para {nombre_loteria}: {len(df_loteria)} registros")
                 print("   Se necesitan al menos 50 registros")
                 continue
             
-            X_l = df_loteria[["dia", "mes", "anio", "dia_semana"]].values
+            # Ordenar por fecha
+            df_loteria = df_loteria.sort_values("fecha").reset_index(drop=True)
+            
+            # ============================================================
+            # FEATURES AVANZADAS PARA MAYOR PRECISIÓN
+            # ============================================================
+            
+            # 1. Features temporales básicas
+            df_loteria["dia"] = df_loteria["fecha"].dt.day
+            df_loteria["mes"] = df_loteria["fecha"].dt.month
+            df_loteria["anio"] = df_loteria["fecha"].dt.year
+            df_loteria["dia_semana"] = df_loteria["fecha"].dt.weekday
+            
+            # 2. Features temporales adicionales
+            df_loteria["dia_mes"] = df_loteria["fecha"].dt.day
+            df_loteria["semana_anio"] = df_loteria["fecha"].dt.isocalendar().week
+            df_loteria["trimestre"] = df_loteria["fecha"].dt.quarter
+            df_loteria["es_fin_semana"] = (df_loteria["dia_semana"] >= 5).astype(int)
+            df_loteria["es_inicio_mes"] = (df_loteria["dia"] <= 7).astype(int)
+            df_loteria["es_fin_mes"] = (df_loteria["dia"] >= 23).astype(int)
+            
+            # 3. Features de lag (valores anteriores)
+            df_loteria["result_lag_1"] = df_loteria["result"].shift(1)
+            df_loteria["result_lag_2"] = df_loteria["result"].shift(2)
+            df_loteria["result_lag_3"] = df_loteria["result"].shift(3)
+            
+            # 4. Features de rolling (promedios móviles)
+            df_loteria["result_rolling_mean_7"] = df_loteria["result"].rolling(window=7, min_periods=1).mean()
+            df_loteria["result_rolling_std_7"] = df_loteria["result"].rolling(window=7, min_periods=1).std()
+            df_loteria["result_rolling_mean_30"] = df_loteria["result"].rolling(window=30, min_periods=1).mean()
+            df_loteria["result_rolling_std_30"] = df_loteria["result"].rolling(window=30, min_periods=1).std()
+            
+            # 5. Features de tendencia
+            df_loteria["tendencia_7"] = (
+                df_loteria["result"].rolling(window=7, min_periods=1).apply(
+                    lambda x: 1 if len(x) > 1 and x.iloc[-1] > x.iloc[0] else 0
+                )
+            )
+            
+            # 6. Features de frecuencia
+            df_loteria["result_freq_mean"] = df_loteria["result"].rolling(window=30, min_periods=1).mean()
+            df_loteria["result_freq_std"] = df_loteria["result"].rolling(window=30, min_periods=1).std()
+            
+            # Rellenar NaN con 0
+            df_loteria = df_loteria.fillna(0)
+            
+            # Seleccionar features para entrenamiento
+            feature_cols = [
+                "dia", "mes", "anio", "dia_semana",
+                "dia_mes", "semana_anio", "trimestre",
+                "es_fin_semana", "es_inicio_mes", "es_fin_mes",
+                "result_lag_1", "result_lag_2", "result_lag_3",
+                "result_rolling_mean_7", "result_rolling_std_7",
+                "result_rolling_mean_30", "result_rolling_std_30",
+                "tendencia_7",
+                "result_freq_mean", "result_freq_std"
+            ]
+            
+            X_l = df_loteria[feature_cols].values
             y_r = df_loteria["result"].values
             y_s = df_loteria["series"].values
+            
+            print(f"\nDatos preparados:")
+            print(f"  Registros: {len(X_l)}")
+            print(f"  Features: {len(feature_cols)}")
+            print(f"  Features usadas: {', '.join(feature_cols[:5])}... (+{len(feature_cols)-5} más)")
             
             entrenar_modelos_por_loteria(
                 X=X_l,
                 y_result=y_r,
                 y_series=y_s,
                 nombre_loteria=nombre_loteria,
-                min_acc=settings.MIN_ACCURACY,
-                max_iter=settings.ITERATIONS,
-                verbose=True  # ✅ Activar visualización
+                min_acc=0.05,  # 5% para números (lotería es difícil)
+                max_iter=100,  # Reducido para entrenamiento más rápido
+                verbose=True
             )
         
         print(f"\n{'='*70}")
-        print("Entrenamiento completado para todas las loterias")
+        print("✅ Entrenamiento completado para todas las loterías")
         print('='*70)
         return True
         
     except Exception as e:
         logger.error(f"Error en entrenamiento: {e}", exc_info=True)
-        print(f"Error: {e}")
+        print(f"\n❌ Error: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -136,79 +253,56 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
 
 def ejecutar_prediccion(loteria: Optional[str] = None) -> bool:
     """
-    Genera predicciones.
+    3. Genera predicciones.
     
     Args:
         loteria: Nombre específico de lotería (opcional)
     """
     try:
-        logger.info(f"Generando predicciones{f' para {loteria}' if loteria else ''}...")
+        logger.info("="*70)
+        logger.info("3. GENERACIÓN DE PREDICCIONES")
+        logger.info("="*70)
+        
+        print(f"\n{'='*70}")
+        print("3. GENERACIÓN DE PREDICCIONES")
+        print('='*70)
+        
         from src.utils.prediction import main as prediction_main
         
         prediction_main()
-        print("✅ Predicciones generadas")
+        print("\n✅ Predicciones generadas")
         return True
     except Exception as e:
         logger.error(f"Error en predicción: {e}")
-        print(f"❌ Error: {e}")
-        return False
-
-
-def ejecutar_batch_prediction(dias: int = 7, loteria: Optional[str] = None, guardar: bool = False) -> bool:
-    """
-    Genera predicciones por lotes para múltiples fechas.
-    
-    Args:
-        dias: Número de días a predecir
-        loteria: Nombre específico de lotería (opcional)
-        guardar: Si se debe guardar en archivo JSON
-    """
-    try:
-        logger.info(f"Generando predicciones batch para {dias} días...")
-        from src.utils.batch_prediction import (
-            predecir_batch_todas_loterias,
-            mostrar_predicciones_batch,
-            guardar_predicciones_batch
-        )
-        
-        loterias = [loteria] if loteria else None
-        predicciones = predecir_batch_todas_loterias(dias=dias, loterias=loterias)
-        
-        mostrar_predicciones_batch(predicciones)
-        
-        if guardar:
-            guardar_predicciones_batch(predicciones)
-            print("\n✅ Predicciones guardadas en archivo JSON")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Error en batch prediction: {e}")
-        print(f"❌ Error: {e}")
+        print(f"\n❌ Error: {e}")
         return False
 
 
 def ejecutar_pipeline_completo() -> bool:
-    """Ejecuta el pipeline completo."""
-    print("🎯 Ejecutando pipeline completo...\n")
+    """Ejecuta el pipeline completo: actualizar → entrenar → predecir → limpiar."""
+    print("\n" + "="*70)
+    print("🎯 EJECUTANDO PIPELINE COMPLETO")
+    print("="*70)
     
     pasos = [
-        ("Dependencias", ejecutar_dependencias),
-        ("Recolección de Datos", ejecutar_recoleccion),
-        ("Predicción", ejecutar_prediccion)
+        ("1. Actualización de Datos", lambda: ejecutar_actualizacion()),
+        ("2. Entrenamiento de Modelos", lambda: ejecutar_entrenamiento()),
+        ("3. Generación de Predicciones", lambda: ejecutar_prediccion()),
+        ("4. Limpieza de Cache", lambda: ejecutar_limpieza())
     ]
     
     for nombre, funcion in pasos:
-        print(f"\n{'='*50}")
+        print(f"\n{'='*70}")
         print(f"📍 {nombre}")
-        print('='*50)
+        print('='*70)
         
         if not funcion():
             print(f"\n❌ Pipeline detenido en: {nombre}")
             return False
     
-    print("\n" + "="*50)
+    print("\n" + "="*70)
     print("🎉 Pipeline completado exitosamente")
-    print("="*50)
+    print("="*70)
     return True
 
 
@@ -220,64 +314,48 @@ def crear_parser() -> argparse.ArgumentParser:
         epilog="""
 Ejemplos de uso:
   python main.py                          # Ejecuta pipeline completo
-  python main.py --deps                   # Solo dependencias
-  python main.py --collect                # Solo recolección
-  python main.py --train                  # Solo entrenamiento
-  python main.py --predict                # Solo predicción
-  python main.py --predict --lottery ASTRO # Predicción específica
-  python main.py --batch                  # Predicciones para 7 días
-  python main.py --batch --days 30        # Predicciones para 30 días
-  python main.py --batch --save           # Guardar en JSON
+  python main.py --actualizar             # 1. Actualizar datos desde SuperAstro
+  python main.py --entrenar               # 2. Entrenar modelos ML
+  python main.py --predecir               # 3. Generar predicciones
+  python main.py --limpiar                # 4. Limpiar cache de Python
+  
+  # Con filtros
+  python main.py --actualizar --lottery luna     # Solo ASTRO LUNA
+  python main.py --entrenar --lottery "ASTRO LUNA"  # Entrenar solo ASTRO LUNA
+  python main.py --predecir --lottery ASTRO      # Predecir solo astros
         """
     )
     
+    # Opciones principales
     parser.add_argument(
-        '--deps',
+        '--actualizar',
         action='store_true',
-        help='Verificar/instalar dependencias'
+        help='1. Actualizar datos desde SuperAstro (sitio oficial)'
     )
     
     parser.add_argument(
-        '--collect',
+        '--entrenar',
         action='store_true',
-        help='Recolectar datos desde Excel/API'
+        help='2. Entrenar modelos de Machine Learning'
     )
     
     parser.add_argument(
-        '--train',
+        '--predecir',
         action='store_true',
-        help='Entrenar modelos de ML'
+        help='3. Generar predicciones del próximo número ganador'
     )
     
     parser.add_argument(
-        '--predict',
+        '--limpiar',
         action='store_true',
-        help='Generar predicciones'
+        help='4. Limpiar cache de Python (__pycache__)'
     )
     
-    parser.add_argument(
-        '--batch',
-        action='store_true',
-        help='Predicciones por lotes (múltiples fechas)'
-    )
-    
-    parser.add_argument(
-        '--days',
-        type=int,
-        default=7,
-        help='Número de días para batch prediction (default: 7)'
-    )
-    
-    parser.add_argument(
-        '--save',
-        action='store_true',
-        help='Guardar predicciones batch en archivo JSON'
-    )
-    
+    # Opciones adicionales
     parser.add_argument(
         '--lottery',
         type=str,
-        help='Nombre específico de lotería (ej: ASTRO)'
+        help='Filtro de lotería (ej: astro, luna, sol)'
     )
     
     parser.add_argument(
@@ -327,26 +405,23 @@ def main() -> int:
             return 0
         
         # Si no hay argumentos, ejecutar pipeline completo
-        if not any([args.deps, args.collect, args.train, args.predict, args.batch]):
+        if not any([args.actualizar, args.entrenar, args.predecir, args.limpiar]):
             return 0 if ejecutar_pipeline_completo() else 1
         
-        # Ejecutar componentes individuales
+        # Ejecutar opciones individuales
         exito = True
         
-        if args.deps:
-            exito = ejecutar_dependencias() and exito
+        if args.actualizar:
+            exito = ejecutar_actualizacion(filtro_loteria=args.lottery) and exito
         
-        if args.collect:
-            exito = ejecutar_recoleccion() and exito
+        if args.entrenar:
+            exito = ejecutar_entrenamiento(loteria=args.lottery) and exito
         
-        if args.train:
-            exito = ejecutar_entrenamiento(args.lottery) and exito
+        if args.predecir:
+            exito = ejecutar_prediccion(loteria=args.lottery) and exito
         
-        if args.predict:
-            exito = ejecutar_prediccion(args.lottery) and exito
-        
-        if args.batch:
-            exito = ejecutar_batch_prediction(args.days, args.lottery, args.save) and exito
+        if args.limpiar:
+            exito = ejecutar_limpieza() and exito
         
         return 0 if exito else 1
     
