@@ -28,23 +28,23 @@ class SuperAstroScraper:
     
     BASE_URL = "https://superastro.com.co/historico.php"
     
-    # Mapeo de signos (abreviaciones a nombres completos)
+    # Mapeo de signos a abreviaciones de 3 letras
     SIGNOS_MAP = {
-        'ARIES': 'ARIES',
-        'TAURO': 'TAURO',
-        'GEMINIS': 'GEMINIS',
-        'GÉMINIS': 'GEMINIS',
-        'CANCER': 'CANCER',
-        'CÁNCER': 'CANCER',
+        'ARIES': 'ARI',
+        'TAURO': 'TAU',
+        'GEMINIS': 'GEM',
+        'GÉMINIS': 'GEM',
+        'CANCER': 'CAN',
+        'CÁNCER': 'CAN',
         'LEO': 'LEO',
-        'VIRGO': 'VIRGO',
-        'LIBRA': 'LIBRA',
-        'ESCORPIO': 'ESCORPIO',
-        'ESCORPION': 'ESCORPIO',
-        'SAGITARIO': 'SAGITARIO',
-        'CAPRICORNIO': 'CAPRICORNIO',
-        'ACUARIO': 'ACUARIO',
-        'PISCIS': 'PISCIS'
+        'VIRGO': 'VIR',
+        'LIBRA': 'LIB',
+        'ESCORPIO': 'ESC',
+        'ESCORPION': 'ESC',
+        'SAGITARIO': 'SAG',
+        'CAPRICORNIO': 'CAP',
+        'ACUARIO': 'ACU',
+        'PISCIS': 'PIS'
     }
     
     def __init__(self, delay_entre_requests: float = 1.0):
@@ -147,10 +147,8 @@ class SuperAstroScraper:
                             resultado = {
                                 'fecha': fecha_str,
                                 'lottery': loteria,
-                                'slug': loteria.lower().replace(' ', '-'),
                                 'result': int(numero_limpio),
-                                'series': self.normalizar_signo(signo),
-                                'sorteo': sorteo
+                                'series': self.normalizar_signo(signo)
                             }
                             
                             logger.info(f"  ✓ Encontrado: {numero_limpio} - {signo}")
