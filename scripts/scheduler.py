@@ -42,9 +42,9 @@ def ejecutar_pipeline_completo():
         # Importar aquí para evitar problemas de importación circular
         import subprocess
         
-        # Ejecutar el pipeline
+        # Ejecutar el pipeline usando main.py
         result = subprocess.run(
-            [sys.executable, "index.py"],
+            [sys.executable, "main.py"],
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,
