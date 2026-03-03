@@ -99,74 +99,92 @@ Lotery_prediction/
 
 ## 🚀 Ejecución del Sistema
 
-### Opción 1: Pipeline completo (recomendado)
+### Pipeline Completo (Recomendado)
 
 ```bash
-python index.py
-```
-
-Este comando ejecuta el pipeline completo:
-1. Instalación/verificación de dependencias
-2. Recolección o actualización de datos desde Excel/API
-3. Predicción de resultados usando modelos previamente entrenados
-4. Limpieza de archivos de caché
-
-### Opción 2: CLI con componentes individuales
-
-```bash
-# Ver configuración actual
-python main.py --config
-
-# Ejecutar pipeline completo
 python main.py
-
-# Solo verificar dependencias
-python main.py --deps
-
-# Solo recolectar datos
-python main.py --collect
-
-# Solo entrenar modelos (modo básico)
-python main.py --train
-
-# Solo generar predicciones
-python main.py --predict
-
-# Predicción para lotería específica
-python main.py --predict --lottery ASTRO
-
-# Predicciones por lotes (múltiples fechas) 🆕
-python main.py --batch                    # 7 días (default)
-python main.py --batch --days 30          # 30 días
-python main.py --batch --save             # Guardar en JSON
-python main.py --batch --lottery "ASTRO LUNA" --days 14
-
-# Predicción mejorada con confianza calibrada 🆕⚡
-python scripts/predict_enhanced.py
-python scripts/predict_enhanced.py --confidence 0.7  # Umbral personalizado
-python scripts/predict_enhanced.py --save            # Guardar resultados
-
-# Ver ayuda
-python main.py --help
 ```
 
-### Opción 3: Entrenamiento Avanzado 🆕
+Este comando ejecuta el pipeline completo en orden:
+1. **Actualizar datos** desde SuperAstro (sitio oficial)
+2. **Entrenar modelos** de Machine Learning
+3. **Generar predicciones** del próximo número ganador
+4. **Limpiar cache** de Python
+
+### Opciones Individuales
+
+El sistema tiene 4 opciones principales:
+
+#### 1. Actualizar Datos
+
+Obtiene los últimos resultados desde el sitio oficial de SuperAstro y los guarda en Excel:
 
 ```bash
-# Entrenamiento con ML avanzado (recomendado)
-python scripts/train_advanced.py
+# Actualizar todas las loterías (ASTRO SOL y ASTRO LUNA)
+python main.py --actualizar
 
-# Con algoritmo específico
-python scripts/train_advanced.py --algorithm XGBoost
+# Actualizar solo ASTRO LUNA
+python main.py --actualizar --lottery luna
 
-# Modo AUTO (prueba todos los algoritmos)
-python scripts/train_advanced.py --algorithm auto
+# Actualizar solo ASTRO SOL
+python main.py --actualizar --lottery sol
 ```
 
-### Opción 4: Entrenamiento Híbrido 🆕🔥
+#### 2. Entrenar Modelos
+
+Entrena modelos de Machine Learning con los datos del Excel:
 
 ```bash
-# Lo mejor de ambos mundos: múltiples algoritmos + evolución continua
+# Entrenar todas las loterías
+python main.py --entrenar
+
+# Entrenar solo ASTRO LUNA
+python main.py --entrenar --lottery "ASTRO LUNA"
+```
+
+#### 3. Generar Predicciones
+
+Genera predicciones del próximo número ganador usando los modelos entrenados:
+
+```bash
+# Predecir todas las loterías
+python main.py --predecir
+
+# Predecir solo astros
+python main.py --predecir --lottery ASTRO
+```
+
+#### 4. Limpiar Cache
+
+Limpia los archivos de cache de Python (`__pycache__`):
+
+```bash
+python main.py --limpiar
+```
+
+### Combinación de Opciones
+
+Puedes combinar múltiples opciones en un solo comando:
+
+```bash
+# Actualizar y entrenar
+python main.py --actualizar --entrenar
+
+# Actualizar, entrenar y predecir
+python main.py --actualizar --entrenar --predecir
+
+# Pipeline completo manual
+python main.py --actualizar --entrenar --predecir --limpiar
+```
+
+### Entrenamiento Avanzado (Opcional)
+
+Para usuarios avanzados, el sistema incluye opciones de entrenamiento adicionales:
+
+#### Entrenamiento Híbrido
+
+```bash
+# Lo mejor: múltiples algoritmos + evolución continua
 python scripts/train_hybrid.py
 
 # Ver estado de variantes
@@ -182,7 +200,7 @@ python scripts/train_hybrid.py --no-features
 - Evolución continua sin reiniciar
 - El mejor algoritmo siempre en producción
 
-### Opción 5: Entrenamiento Mejorado 🆕⚡
+#### Entrenamiento Mejorado
 
 ```bash
 # Sistema mejorado con features de frecuencia + calibración + optimización bayesiana
@@ -193,27 +211,9 @@ python scripts/train_enhanced.py --algorithm XGBoost --iterations 100
 
 # Sin calibración (más rápido)
 python scripts/train_enhanced.py --no-calibration
-
-# Sin features de frecuencia (más rápido)
-python scripts/train_enhanced.py --no-frequency
 ```
-
-**Características del Mejorado:**
-- Features de frecuencia y patrones (números calientes/fríos)
-- Calibración de probabilidades (confianza real)
-- Optimización bayesiana (mejores hiperparámetros)
-- Predicciones con recomendación de apostar o no
 
 Ver [MEJORAS_ML.md](Docs/MEJORAS_ML.md) para documentación completa.
-
-### Opción 4: Entrenamiento directo de modelos (básico)
-
-```bash
-python -m src.utils.training
-```
-
-Esto buscará los modelos `.pkl` previamente creados por lotería. Si existen, los perfeccionará. Si no se encuentra ningún modelo previo, se mostrará un mensaje:  
-**"Loterías no encontradas"**
 
 ---
 
@@ -415,7 +415,30 @@ Los datos provienen de archivos como:
 data/resultados_astro.xlsx
 ```
 
-El sistema los crea automáticamente si no existen, usando fuentes disponibles.
+### Fuentes de Datos
+
+El sistema soporta dos métodos de recolección:
+
+1. **API Tradicional** (por defecto):
+   ```bash
+   python main.py --collect
+   ```
+   Usa la API configurada en `.env` (API_URL)
+
+2. **SuperAstro Scraper** (recomendado) 🆕:
+   ```bash
+   python main.py --collect --superastro
+   ```
+   Obtiene datos directamente del sitio oficial https://superastro.com.co/historico.php
+
+**Ventajas del SuperAstro Scraper:**
+- Fuente oficial y confiable
+- Datos siempre actualizados
+- No depende de APIs externas
+- Actualización automática desde última fecha hasta ayer
+- Soporte para ASTRO SOL y ASTRO LUNA
+
+El sistema crea los archivos automáticamente si no existen.
 
 ---
 
@@ -618,6 +641,9 @@ python scripts/visualizar_entrenamiento.py --latest
 python scripts/ver_alertas.py
 python scripts/ver_alertas.py --level CRITICAL
 python scripts/ver_alertas.py --report
+
+# Probar SuperAstro Scraper 🆕
+python scripts/test_superastro_scraper.py
 
 # Limpiar caché manualmente
 python -m src.utils.drop_cache
