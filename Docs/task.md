@@ -77,7 +77,9 @@
 ## 📋 Tareas Pendientes (Opcionales)
 
 ### Mejoras de Performance
-- [ ] **Paralelización** - Entrenar múltiples loterías en paralelo
+- [X] **Paralelización** - Entrenar múltiples loterías en paralelo
+- [ ] **Paralelización** - Hacer varios entrenamientos paralelamente a la misma loteria
+                           Ejemplo: python main.py --entrenar --lottery luna
 - [ ] **Cache inteligente** - Guardar datos procesados en Parquet
 - [ ] **Modelo multi-tarea** - Un modelo para todas las loterías
 
@@ -99,8 +101,8 @@
 
 ### Documentación
 - [ ] **API docs** - Swagger/OpenAPI si se crea API
-- [ ] **Video tutoriales** - Guías de uso en video
-- [ ] **Casos de uso** - Ejemplos reales de uso
+- [X] **Video tutoriales** - Guías de uso en video
+- [X] **Casos de uso** - Ejemplos reales de uso
 
 ---
 
@@ -157,7 +159,7 @@ python main.py
 
 1. **Scraper SuperAstro**: Fuente oficial 100% confiable
 2. **Formato de datos**: Excel con columnas estructuradas
-3. **Modelos**: Guardados en `IA_models/` como archivos .pkl
+3. **Modelos**: Guardados en `IA_models/` como archivos .pkl (No se hace)
 4. **Logs**: Historial completo en `logs/`
 5. **Configuración**: Editable en archivo `.env`
 
@@ -177,3 +179,13 @@ python main.py
 ---
 
 **El sistema está listo para uso en producción con las 4 funcionalidades principales implementadas y funcionando correctamente.**
+
+# propio
+
+1. el sistema no crea un archivo .pkl ni usa un archivo .pkl para guardar los mejores resultado del entrenamiento de la IA (IA_models esta vacio)
+
+1.1 crear el modelo pkl para series_<nombre_loteria> y otro para result_<nombre_loteria>
+
+2. el entrenamiento esta empezando desde cero cada vez que se entrena y no usa el mejor IA_model si existe 
+
+3. el proyecto esta guardado en github, seria buena practica tener varias ramas y como nombrarlas?
