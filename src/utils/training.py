@@ -3,11 +3,18 @@ import sys
 import joblib
 import warnings
 import numpy as np
+from sklearn.metrics import (accuracy_score, f1_score, classification_report)
+from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score, classification_report
-from src.utils.training_visualizer import TrainingVisualizer
+from sklearn.base import clone
+import numpy as np
+from sklearn.base import clone
 from src.utils.alerts import check_model_performance
+from src.utils.training_visualizer import TrainingVisualizer
+from src.utils.save_training import (guardar_modelo_si_mejora, crear_base_modelos_IA)
+
+from src.utils.mutation import entrenamiento_evolutivo
 
 ITERATIONS = 8000
 MIN_ACCURACY = 0.7
@@ -35,20 +42,7 @@ def evaluar_y_reportar(modelo, X_test, y_test, nombre_modelo, verbose=True):
 
     return acc, f1
 
-def generar_ruta_modelo(nombre_loteria, tipo):
-    nombre_archivo = f"modelo_{tipo}_{nombre_loteria.lower().replace(' ', '_')}.pkl"
-    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    ruta_modelo = os.path.join(BASE_DIR, "IA_models", nombre_archivo)
-    os.makedirs(os.path.dirname(ruta_modelo), exist_ok=True)
-
-    return ruta_modelo
-
 def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=MIN_ACCURACY , max_iter=ITERATIONS, verbose=False):
-    modelo_result_path = generar_ruta_modelo(nombre_loteria, "result")
-    modelo_series_path = generar_ruta_modelo(nombre_loteria, "series")
-
-    if verbose:
-        print(f"Guardando modelos en:\n- {modelo_result_path}\n- {modelo_series_path}")
 
     # Entrenar los modelos con rutas específicas para esta lotería
     mejor_modelo_result, mejor_modelo_series, acc_result, acc_series, intentos, history = entrenar_modelos(
@@ -59,8 +53,6 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
         max_iter=max_iter,
         verbose=verbose,
         save_models=True,
-        modelo_result_path=modelo_result_path,
-        modelo_series_path=modelo_series_path,
         enable_visualization=True,
         lottery_name=nombre_loteria
     )
@@ -78,64 +70,132 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
     check_model_performance(nombre_loteria, "result", acc_result, f1_result)
     check_model_performance(nombre_loteria, "series", acc_series, f1_series)
 
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.base import clone
+from sklearn.utils.class_weight import compute_class_weight
+import numpy as np
+
+
+def calcular_class_weights(y):
+    """
+    Calcula pesos balanceados manualmente para evitar warnings con warm_start.
+    """
+    clases = np.unique(y)
+    pesos = compute_class_weight(
+        class_weight="balanced",
+        classes=clases,
+        y=y
+    )
+    return dict(zip(clases, pesos))
+
 def entrenar_modelo_result(X_train, y_train, random_state, warm_start_model=None):
     """
     Entrena modelo para predecir números.
     Si se proporciona warm_start_model, continúa desde ese modelo.
     """
+
+    class_weights = calcular_class_weights(y_train)
+
     if warm_start_model is not None:
-        # Usar el modelo existente como base y agregar más árboles
-        modelo = warm_start_model
-        modelo.n_estimators += 50  # Agregar 50 árboles más
+        modelo = clone(warm_start_model)
+
+        modelo.n_estimators += 50
         modelo.warm_start = True
+        modelo.class_weight = class_weights
+
         modelo.fit(X_train, y_train)
-        modelo.warm_start = False  # Desactivar para futuras predicciones
+
+        modelo.warm_start = False
     else:
-        # Crear modelo nuevo
         modelo = RandomForestClassifier(
             n_estimators=200,
             max_depth=4,
             min_samples_split=5,
-            class_weight='balanced',
+            class_weight=class_weights,
             random_state=random_state
         )
+
         modelo.fit(X_train, y_train)
     return modelo
 
-def entrenar_modelo_series(X_train, y_train, warm_start_model=None):
+def entrenar_modelo_series(X_train, y_train, random_state=42, warm_start_model=None):
     """
     Entrena modelo para predecir signos zodiacales.
     Si se proporciona warm_start_model, continúa desde ese modelo.
     """
+
+    class_weights = calcular_class_weights(y_train)
+
     if warm_start_model is not None:
-        # Usar el modelo existente como base y agregar más árboles
-        modelo = warm_start_model
-        modelo.n_estimators += 50  # Agregar 50 árboles más
+        modelo = clone(warm_start_model)
+
+        modelo.n_estimators += 50
         modelo.warm_start = True
+        modelo.class_weight = class_weights
+
         modelo.fit(X_train, y_train)
-        modelo.warm_start = False  # Desactivar para futuras predicciones
+
+        modelo.warm_start = False
     else:
-        # Crear modelo nuevo
         modelo = RandomForestClassifier(
             n_estimators=200,
             max_depth=10,
             min_samples_split=5,
-            class_weight='balanced',
-            random_state=42
+            class_weight=class_weights,
+            random_state=random_state
         )
+
         modelo.fit(X_train, y_train)
     return modelo
 
-def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERATIONS, verbose=False,
-                     save_models=True, modelo_result_path=None, modelo_series_path=None, 
-                     enable_visualization=True, lottery_name="unknown"):
+def cargar_mejor_modelo(nombre_loteria: str, tipo_modelo: str):
+    """
+    Carga el mejor modelo disponible según accuracy.
+    """
 
+    base = crear_base_modelos_IA(nombre_loteria)
+    paths = base[tipo_modelo]
+
+    mejor_modelo = None
+    mejor_acc = -1
+
+    for path in paths:
+
+        if not os.path.exists(path):
+            continue
+
+        try:
+            payload = joblib.load(path)
+
+            acc = payload.get("accuracy", 0)
+
+            if acc > mejor_acc:
+                mejor_acc = acc
+                mejor_modelo = payload["model"]
+
+        except Exception:
+            continue
+
+    return mejor_modelo, mejor_acc
+
+def entrenar_modelos(
+    X,
+    y_result, y_series,
+    min_acc=MIN_ACCURACY,
+    max_iter=ITERATIONS,
+    verbose=False,
+    save_models=True,
+    enable_visualization=True,
+    lottery_name="unknown"
+):
     mejor_acc_result = 0
     mejor_acc_series = 0
     mejor_modelo_result = None
     mejor_modelo_series = None
 
+    # ==============================
     # Inicializar visualizador
+    # ==============================
     visualizer = None
     if enable_visualization and verbose:
         visualizer = TrainingVisualizer(
@@ -144,7 +204,7 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERA
             enable_progress_bar=True,
             enable_logging=True
         )
-    
+
     history = {
         "attempts": [],
         "result_acc": [],
@@ -153,67 +213,108 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERA
         "series_f1": []
     }
 
-    # Intentar cargar modelos previos si existen
+    # ==============================
+    # Cargar modelos previos (Memoria IA)
+    # ==============================
     modelos_cargados = False
     modelo_base_result = None
     modelo_base_series = None
-    
-    if save_models:
-        if modelo_result_path and os.path.exists(modelo_result_path):
-            try:
-                modelo_cargado = joblib.load(modelo_result_path)
-                # Evaluar en todo el dataset para obtener baseline
-                pred = modelo_cargado.predict(X)
-                acc = accuracy_score(y_result, pred)
-                mejor_modelo_result = modelo_cargado
-                mejor_acc_result = acc
-                modelo_base_result = modelo_cargado  # Guardar para warm start
-                modelos_cargados = True
-                if verbose:
-                    print(f"✓ Modelo Result cargado (baseline: {acc:.4f})")
-                    print(f"  Continuará entrenando desde este modelo...")
-            except Exception as e:
-                if verbose:
-                    print(f"⚠️ Error al cargar modelo_result: {e}")
 
-        if modelo_series_path and os.path.exists(modelo_series_path):
-            try:
-                modelo_cargado = joblib.load(modelo_series_path)
-                pred = modelo_cargado.predict(X)
-                acc = accuracy_score(y_series, pred)
-                mejor_modelo_series = modelo_cargado
-                mejor_acc_series = acc
-                modelo_base_series = modelo_cargado  # Guardar para warm start
-                modelos_cargados = True
-                if verbose:
-                    print(f"✓ Modelo Series cargado (baseline: {acc:.4f})")
-                    print(f"  Continuará entrenando desde este modelo...")
-            except Exception as e:
-                if verbose:
-                    print(f"⚠️ Error al cargar modelo_series: {e}")
-    
-    # Si ambos modelos ya superan el umbral, informar y continuar
-    if modelos_cargados and mejor_acc_result >= min_acc and mejor_acc_series >= min_acc:
+    if save_models:
+
+        modelo_cargado, acc = cargar_mejor_modelo(
+            lottery_name,
+            "result"
+        )
+
+        if modelo_cargado:
+            mejor_modelo_result = modelo_cargado
+            mejor_acc_result = acc
+            modelo_base_result = modelo_cargado
+            modelos_cargados = True
+
+            if verbose:
+                print(f"✓ Modelo Result cargado (baseline: {acc:.4f})")
+                print("  Continuará entrenando desde memoria IA...")
+
+        modelo_cargado, acc = cargar_mejor_modelo(
+            lottery_name,
+            "series"
+        )
+
+        if modelo_cargado:
+            mejor_modelo_series = modelo_cargado
+            mejor_acc_series = acc
+            modelo_base_series = modelo_cargado
+            modelos_cargados = True
+
+            if verbose:
+                print(f"✓ Modelo Series cargado (baseline: {acc:.4f})")
+                print("  Continuará entrenando desde memoria IA...")
+
+    # ==============================
+    # Información si ya superan umbral
+    # ==============================
+    if modelos_cargados and \
+       mejor_acc_result >= min_acc and \
+       mejor_acc_series >= min_acc:
+
         if verbose:
             print(f"\n✓ Modelos existentes superan el umbral:")
             print(f"  Result: {mejor_acc_result:.4f} >= {min_acc}")
             print(f"  Series: {mejor_acc_series:.4f} >= {min_acc}")
             print(f"\n  Entrenando {max_iter} iteraciones para mejorar...\n")
 
-    # Iterar entrenamientos
+    # ==============================
+    # Loop de entrenamiento
+    # ==============================
     for intento in range(1, max_iter + 1):
+
         random_state = np.random.randint(0, 10000)
 
-        X_train, X_test, y_train_result, y_test_result = train_test_split(
-            X, y_result, test_size=0.2, random_state=random_state)
-        _, _, y_train_series, y_test_series = train_test_split(
-            X, y_series, test_size=0.2, random_state=random_state)
+        X_train, X_test, \
+        y_train_result, y_test_result, \
+        y_train_series, y_test_series = train_test_split(
+            X,
+            y_result,
+            y_series,
+            test_size=0.2,
+            random_state=random_state
+        )
 
-        modelo_result = entrenar_modelo_result(X_train, y_train_result, random_state, warm_start_model=modelo_base_result)
-        modelo_series = entrenar_modelo_series(X_train, y_train_series, warm_start_model=modelo_base_series)
+        modelo_result, acc_result = entrenamiento_evolutivo(
+            X_train,
+            y_train_result,
+            X_test,
+            y_test_result,
+            generaciones=10,
+            poblacion_size=10
+        )
 
-        acc_result, f1_result = evaluar_y_reportar(modelo_result, X_test, y_test_result, "Result", verbose=False)
-        acc_series, f1_series = evaluar_y_reportar(modelo_series, X_test, y_test_series, "Series", verbose=False)
+        modelo_series, acc_series = entrenamiento_evolutivo(
+            X_train,
+            y_train_series,
+            X_test,
+            y_test_series,
+            generaciones=10,
+            poblacion_size=10
+        )
+
+        acc_result, f1_result = evaluar_y_reportar(
+            modelo_result,
+            X_test,
+            y_test_result,
+            "Result",
+            verbose=False
+        )
+
+        acc_series, f1_series = evaluar_y_reportar(
+            modelo_series,
+            X_test,
+            y_test_series,
+            "Series",
+            verbose=False
+        )
 
         history["attempts"].append(intento)
         history["result_acc"].append(acc_result)
@@ -221,231 +322,103 @@ def entrenar_modelos(X, y_result, y_series, min_acc=MIN_ACCURACY, max_iter=ITERA
         history["result_f1"].append(f1_result)
         history["series_f1"].append(f1_series)
 
-        # Actualizar visualización
+        # ==============================
+        # Visualización
+        # ==============================
         if visualizer:
-            visualizer.update(intento, acc_result, acc_series, f1_result, f1_series)
+            visualizer.update(
+                intento,
+                acc_result,
+                acc_series,
+                f1_result,
+                f1_series
+            )
         elif verbose:
             sys.stdout.write(
-                f"\r🔄 Intento {intento}/{max_iter} | Acc Result: {acc_result:.4f} | Series: {acc_series:.4f} | "
-                f"F1 Result: {f1_result:.4f} | Series: {f1_series:.4f}"
+                f"\r🔄 Intento {intento}/{max_iter}"
+                f" | Acc Result: {acc_result:.4f}"
+                f" | Series: {acc_series:.4f}"
+                f" | F1 Result: {f1_result:.4f}"
+                f" | Series: {f1_series:.4f}"
             )
             sys.stdout.flush()
 
-        # Actualizar mejores modelos
-        mejora_result = False
-        mejora_series = False
-        
+        # ==============================
+        # Mejor modelo encontrado
+        # ==============================
         if acc_result > mejor_acc_result:
             mejor_acc_result = acc_result
             mejor_modelo_result = modelo_result
-            mejora_result = True
 
         if acc_series > mejor_acc_series:
             mejor_acc_series = acc_series
             mejor_modelo_series = modelo_series
-            mejora_series = True
 
-        # Detener solo si:
-        # 1. Ambos modelos superan el umbral Y
-        # 2. Han pasado al menos 100 iteraciones (para dar oportunidad de mejorar) Y
-        # 3. No ha habido mejoras en las últimas 50 iteraciones
-        if acc_result >= min_acc and acc_series >= min_acc and intento >= 100:
-            # Verificar si hubo mejoras recientes
-            ultimas_50 = history["attempts"][-50:] if len(history["attempts"]) >= 50 else history["attempts"]
-            if len(ultimas_50) >= 50:
-                # Si no hubo mejoras en las últimas 50 iteraciones, detener
+        # ==============================
+        # Early stop inteligente (convergencia real)
+        # ==============================
+        if (
+            acc_result >= min_acc and
+            acc_series >= min_acc and
+            intento >= 5
+        ):
+
+            recent_result = history["result_acc"][-50:]
+            recent_series = history["series_acc"][-50:]
+
+            if (
+                len(recent_result) == 50 and
+                max(recent_result) - min(recent_result) < 0.002 and
+                max(recent_series) - min(recent_series) < 0.002
+            ):
                 if visualizer:
                     visualizer.finish(success=True)
                 elif verbose:
-                    print(f"\nUmbral alcanzado y sin mejoras recientes en intento {intento}")
-                break
-            # Si aún no hay 50 iteraciones, continuar
+                    print(f"\nEarly stop por convergencia (intento {intento})")
 
-    # Finalizar visualización si no se alcanzó el umbral
+                break
+
+    # ==============================
+    # Finalizar visualización
+    # ==============================
     if visualizer and intento == max_iter:
         visualizer.finish(success=False)
-    
-    # Comparar y guardar modelos con verificación de historial
+
+    # ==============================
+    # Guardado en Memoria IA
+    # ==============================
     if save_models:
+
         if not visualizer:
-            print("\nComparacion de mejoras:")
+            print("\n🧠 Actualizando memoria IA:")
 
         try:
-            os.makedirs(os.path.dirname(modelo_result_path), exist_ok=True)
 
-            # Calcular score combinado del entrenamiento actual
-            current_combined_score = (mejor_acc_result + mejor_acc_series) / 2
-            
-            # Verificar historial y decidir si sobrescribir .pkl
-            should_update_pkl = _verificar_y_comparar_historial(
-                lottery_name=lottery_name,
-                current_score=current_combined_score,
-                current_result_acc=mejor_acc_result,
-                current_series_acc=mejor_acc_series,
-                modelo_result_path=modelo_result_path,
-                modelo_series_path=modelo_series_path,
-                verbose=verbose
+            guardar_modelo_si_mejora(
+                nombre_loteria=lottery_name,
+                tipo_modelo="result",
+                modelo=mejor_modelo_result,
+                accuracy=mejor_acc_result,
             )
-            
-            # Guardar modelos según decisión
-            if should_update_pkl:
-                if modelo_result_path and mejor_modelo_result:
-                    joblib.dump(mejor_modelo_result, modelo_result_path)
-                    print(f"   ✅ Modelo Result actualizado en IA_models/ (Acc: {mejor_acc_result:.4f})")
-                
-                if modelo_series_path and mejor_modelo_series:
-                    joblib.dump(mejor_modelo_series, modelo_series_path)
-                    print(f"   ✅ Modelo Series actualizado en IA_models/ (Acc: {mejor_acc_series:.4f})")
-            else:
-                print(f"   📊 Modelos guardados solo en historial (no superan el .pkl actual)")
-                print(f"      Result: {mejor_acc_result:.4f} | Series: {mejor_acc_series:.4f}")
+
+            guardar_modelo_si_mejora(
+                nombre_loteria=lottery_name,
+                tipo_modelo="series",
+                modelo=mejor_modelo_series,
+                accuracy=mejor_acc_series,
+            )
 
         except Exception as e:
             print(f"❌ Error al guardar modelos: {e}")
 
-    return mejor_modelo_result, mejor_modelo_series, mejor_acc_result, mejor_acc_series, intento, history
-
-
-def _verificar_y_comparar_historial(
-    lottery_name: str,
-    current_score: float,
-    current_result_acc: float,
-    current_series_acc: float,
-    modelo_result_path: str,
-    modelo_series_path: str,
-    verbose: bool = False
-) -> bool:
-    """
-    Verifica el historial de entrenamientos y decide si actualizar el modelo .pkl.
-    
-    Estrategia:
-    1. Lee todos los logs JSON de la lotería
-    2. Encuentra los 3 mejores entrenamientos históricos
-    3. Compara el mejor histórico con el modelo .pkl actual
-    4. Solo actualiza .pkl si el mejor histórico supera al .pkl actual
-    
-    Args:
-        lottery_name: Nombre de la lotería
-        current_score: Score combinado del entrenamiento actual
-        current_result_acc: Accuracy del modelo result actual
-        current_series_acc: Accuracy del modelo series actual
-        modelo_result_path: Ruta al modelo result .pkl
-        modelo_series_path: Ruta al modelo series .pkl
-        verbose: Mostrar información detallada
-    
-    Returns:
-        True si debe actualizar el .pkl, False si solo guardar en historial
-    """
-    import json
-    from pathlib import Path
-    
-    logs_dir = Path("logs")
-    
-    # Buscar todos los logs de esta lotería
-    pattern = f"training_{lottery_name}_*.json"
-    log_files = list(logs_dir.glob(pattern))
-    
-    if not log_files:
-        # No hay historial, es el primer entrenamiento
-        if verbose:
-            print("\n   📝 Primer entrenamiento - guardando en IA_models/")
-        return True
-    
-    # Leer todos los logs y extraer scores
-    historical_trainings = []
-    for log_file in log_files:
-        try:
-            with open(log_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                combined_score = (
-                    data.get('best_result_acc', 0) + 
-                    data.get('best_series_acc', 0)
-                ) / 2
-                historical_trainings.append({
-                    'file': log_file.name,
-                    'score': combined_score,
-                    'result_acc': data.get('best_result_acc', 0),
-                    'series_acc': data.get('best_series_acc', 0),
-                    'timestamp': data.get('start_time', '')
-                })
-        except Exception as e:
-            if verbose:
-                print(f"   ⚠️ Error leyendo {log_file.name}: {e}")
-            continue
-    
-    # Agregar el entrenamiento actual
-    historical_trainings.append({
-        'file': 'ACTUAL',
-        'score': current_score,
-        'result_acc': current_result_acc,
-        'series_acc': current_series_acc,
-        'timestamp': 'now'
-    })
-    
-    # Ordenar por score (mayor a menor)
-    historical_trainings.sort(key=lambda x: x['score'], reverse=True)
-    
-    # Obtener los 3 mejores
-    top_3 = historical_trainings[:3]
-    
-    if verbose:
-        print("\n   📊 Top 3 Entrenamientos Históricos:")
-        for i, training in enumerate(top_3, 1):
-            role = "MEJOR" if i == 1 else "EXPERIMENTAL"
-            marker = "🏆" if i == 1 else "🧪"
-            is_current = " (ACTUAL)" if training['file'] == 'ACTUAL' else ""
-            print(f"      {marker} #{i} [{role}]: Score={training['score']:.4f} "
-                  f"(R={training['result_acc']:.4f}, S={training['series_acc']:.4f}){is_current}")
-    
-    # Verificar si el entrenamiento actual está en el top 3
-    current_in_top3 = any(t['file'] == 'ACTUAL' for t in top_3)
-    
-    if not current_in_top3:
-        if verbose:
-            print(f"\n   ❌ Entrenamiento actual no está en el Top 3")
-            print(f"      No se actualizará IA_models/, solo se guardará en historial")
-        return False
-    
-    # El mejor del top 3
-    best_historical = top_3[0]
-    
-    # Si el actual no es el mejor del top 3, no actualizar
-    if best_historical['file'] != 'ACTUAL':
-        if verbose:
-            print(f"\n   📊 Entrenamiento actual está en Top 3 pero no es el mejor")
-            print(f"      Mejor histórico: {best_historical['score']:.4f}")
-            print(f"      No se actualizará IA_models/, solo se guardará en historial")
-        return False
-    
-    # El actual es el mejor del top 3, ahora comparar con el .pkl actual
-    if os.path.exists(modelo_result_path) and os.path.exists(modelo_series_path):
-        try:
-            # Cargar modelos actuales y evaluar
-            modelo_result_actual = joblib.load(modelo_result_path)
-            modelo_series_actual = joblib.load(modelo_series_path)
-            
-            # Necesitamos X para evaluar, pero no lo tenemos aquí
-            # Por ahora, asumimos que si el actual es el mejor histórico, debe actualizarse
-            # Esta es una simplificación - idealmente deberíamos pasar X como parámetro
-            
-            if verbose:
-                print(f"\n   🏆 Entrenamiento actual es el MEJOR histórico!")
-                print(f"      Score: {current_score:.4f}")
-                print(f"      ✅ Actualizando IA_models/ con el nuevo mejor modelo")
-            
-            return True
-            
-        except Exception as e:
-            if verbose:
-                print(f"   ⚠️ Error al cargar modelos actuales: {e}")
-            # Si hay error, actualizar por seguridad
-            return True
-    else:
-        # No existen modelos .pkl, es el primer guardado
-        if verbose:
-            print(f"\n   📝 No existen modelos .pkl previos")
-            print(f"      ✅ Guardando primer modelo en IA_models/")
-        return True
+    return (
+        mejor_modelo_result,
+        mejor_modelo_series,
+        mejor_acc_result,
+        mejor_acc_series,
+        intento,
+        history
+    )
 
 if __name__ == "__main__":
     print("🚀 Ejecutando entrenamiento con datos reales desde 'data/resultados_astro.xlsx'...\n")

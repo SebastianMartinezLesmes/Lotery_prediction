@@ -77,7 +77,9 @@
 ## 📋 Tareas Pendientes (Opcionales)
 
 ### Mejoras de Performance
-- [ ] **Paralelización** - Entrenar múltiples loterías en paralelo
+- [X] **Paralelización** - Entrenar múltiples loterías en paralelo
+- [ ] **Paralelización** - Hacer varios entrenamientos paralelamente a la misma loteria
+                           Ejemplo: python main.py --entrenar --lottery luna
 - [ ] **Cache inteligente** - Guardar datos procesados en Parquet
 - [ ] **Modelo multi-tarea** - Un modelo para todas las loterías
 
@@ -99,8 +101,8 @@
 
 ### Documentación
 - [ ] **API docs** - Swagger/OpenAPI si se crea API
-- [ ] **Video tutoriales** - Guías de uso en video
-- [ ] **Casos de uso** - Ejemplos reales de uso
+- [X] **Video tutoriales** - Guías de uso en video
+- [X] **Casos de uso** - Ejemplos reales de uso
 
 ---
 
@@ -157,7 +159,7 @@ python main.py
 
 1. **Scraper SuperAstro**: Fuente oficial 100% confiable
 2. **Formato de datos**: Excel con columnas estructuradas
-3. **Modelos**: Guardados en `IA_models/` como archivos .pkl
+3. **Modelos**: Guardados en `IA_models/` como archivos .pkl (No se hace)
 4. **Logs**: Historial completo en `logs/`
 5. **Configuración**: Editable en archivo `.env`
 
@@ -177,3 +179,24 @@ python main.py
 ---
 
 **El sistema está listo para uso en producción con las 4 funcionalidades principales implementadas y funcionando correctamente.**
+
+# propio
+
+1. Arquitectura de una IA evolutiva: crear documentacion de Genetic Algorithm aplicado a Hyperparameter Search.
+
+idea:
+Generación 0
+   ↓
+Crear población inicial de modelos
+   ↓
+Evaluar todos los modelos
+   ↓
+Seleccionar los mejores (elite)
+   ↓
+Mutar hiperparámetros
+   ↓
+Crear nueva generación
+   ↓
+Repetir N generaciones
+
+2. 
