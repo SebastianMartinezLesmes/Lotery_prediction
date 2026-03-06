@@ -9,9 +9,77 @@ from dotenv import load_dotenv
 # Cargar variables de entorno
 load_dotenv()
 
+
 class Settings:
     """Configuración global del sistema."""
+    # -- Main --
+    TRAINING_CONFIG = {
+        "min_accuracy": 0.05,
+        "max_iterations": 10,
+        "min_records": 50
+    }
+
+    # ============= Training Evolution ===============
+    MODEL_VARIANTS = [
+        {
+            "id": 1,
+            "role": "PRODUCTION",
+            "n_estimators": 200,
+            "max_depth": 4,
+            "min_samples_split": 5,
+            "random_state": 42
+        },
+        {
+            "id": 2,
+            "role": "EXPERIMENTAL_1",
+            "n_estimators": 150,
+            "max_depth": 6,
+            "min_samples_split": 3,
+            "random_state": 123
+        },
+        {
+            "id": 3,
+            "role": "EXPERIMENTAL_2",
+            "n_estimators": 250,
+            "max_depth": 3,
+            "min_samples_split": 7,
+            "random_state": 456
+        }
+    ]
+
+    mutations = {
+        'n_estimators': [100, 150, 200, 250, 300],
+        'max_depth': [3, 4, 5, 6, 7, 8],
+        'min_samples_split': [2, 3, 5, 7, 10]
+    }
+
+    # rango para random_state
+    MODEL_RANDOM_STATE_RANGE = (0, 10000)
     
+    # Configuración del entrenamiento evolutivo
+    EVOLUTIONARY_MAX_ITERATIONS = 10000
+    EVOLUTIONARY_PATIENCE = 100
+
+    # Tipos de modelo que usa el sistema
+    MODEL_TYPES = ["result", "series"]
+
+    # Separador de logs
+    LOG_SEPARATOR = "=" * 70
+
+    # ======================= mutations ===================
+
+    EVOLUTION_GENERATIONS = 50
+    EVOLUTION_POPULATION_SIZE = 20
+    EVOLUTION_ELITE_SIZE = 5
+
+    RF_N_ESTIMATORS_RANGE = (50, 400)
+    RF_MAX_DEPTH_OPTIONS = [3,4,5,6,8,10,None]
+    RF_MIN_SAMPLES_SPLIT_RANGE = (2,10)
+
+    MUTATION_PROBABILITY = 0.4
+    MUTATION_ESTIMATOR_STEP = 50
+
+# ----------------------------------------------
     # Directorios base
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
     MODELS_DIR: Path = BASE_DIR / os.getenv("MODELS_DIR", "IA_models")
