@@ -29,23 +29,7 @@ class SuperAstroScraper:
     BASE_URL = settings.API_URL
     
     # Mapeo de signos a abreviaciones de 3 letras
-    SIGNOS_MAP = {
-        'ARIES': 'ARI',
-        'TAURO': 'TAU',
-        'GEMINIS': 'GEM',
-        'GÉMINIS': 'GEM',
-        'CANCER': 'CAN',
-        'CÁNCER': 'CAN',
-        'LEO': 'LEO',
-        'VIRGO': 'VIR',
-        'LIBRA': 'LIB',
-        'ESCORPIO': 'ESC',
-        'ESCORPION': 'ESC',
-        'SAGITARIO': 'SAG',
-        'CAPRICORNIO': 'CAP',
-        'ACUARIO': 'ACU',
-        'PISCIS': 'PIS'
-    }
+    SIGNOS_MAP = settings.zodiaco
     
     def __init__(self, delay_entre_requests: float = 1.0):
         """
