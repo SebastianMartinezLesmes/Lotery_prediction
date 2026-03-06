@@ -26,7 +26,7 @@ class SuperAstroScraper:
     Scraper para obtener resultados de SuperAstro desde el sitio oficial.
     """
     
-    BASE_URL = "https://superastro.com.co/historico.php"
+    BASE_URL = settings.API_URL
     
     # Mapeo de signos a abreviaciones de 3 letras
     SIGNOS_MAP = {
