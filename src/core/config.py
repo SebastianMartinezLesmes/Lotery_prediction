@@ -26,7 +26,7 @@ class Settings:
     FIND_LOTERY: str = os.getenv("FIND_LOTERY", "ASTRO")
     
     # Model Training
-    ITERATIONS: int = int(os.getenv("ITERATIONS", "8000"))
+    ITERATIONS: int = int(os.getenv("ITERATIONS", "10"))
     MIN_ACCURACY: float = float(os.getenv("MIN_ACCURACY", "0.7"))
     MAX_TRAINING_LOGS: int = int(os.getenv("MAX_TRAINING_LOGS", "3"))
     
@@ -34,7 +34,7 @@ class Settings:
     USE_ADVANCED_ML: bool = os.getenv("USE_ADVANCED_ML", "false").lower() == "true"
     ML_ALGORITHM: str = os.getenv("ML_ALGORITHM", "RandomForest")  # RandomForest, XGBoost, LightGBM, auto
     HYPERPARAMETER_SEARCH: str = os.getenv("HYPERPARAMETER_SEARCH", "random")  # grid, random, none
-    SEARCH_ITERATIONS: int = int(os.getenv("SEARCH_ITERATIONS", "20"))
+    SEARCH_ITERATIONS: int = int(os.getenv("SEARCH_ITERATIONS", "10"))
     CV_FOLDS: int = int(os.getenv("CV_FOLDS", "5"))
     ENABLE_FEATURE_ENGINEERING: bool = os.getenv("ENABLE_FEATURE_ENGINEERING", "true").lower() == "true"
     

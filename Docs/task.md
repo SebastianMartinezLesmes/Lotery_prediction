@@ -182,10 +182,21 @@ python main.py
 
 # propio
 
-1. el sistema no crea un archivo .pkl ni usa un archivo .pkl para guardar los mejores resultado del entrenamiento de la IA (IA_models esta vacio)
+1. Arquitectura de una IA evolutiva: crear documentacion de Genetic Algorithm aplicado a Hyperparameter Search.
 
-1.1 crear el modelo pkl para series_<nombre_loteria> y otro para result_<nombre_loteria>
+idea:
+Generación 0
+   ↓
+Crear población inicial de modelos
+   ↓
+Evaluar todos los modelos
+   ↓
+Seleccionar los mejores (elite)
+   ↓
+Mutar hiperparámetros
+   ↓
+Crear nueva generación
+   ↓
+Repetir N generaciones
 
-2. el entrenamiento esta empezando desde cero cada vez que se entrena y no usa el mejor IA_model si existe 
-
-3. el proyecto esta guardado en github, seria buena practica tener varias ramas y como nombrarlas?
+2. 

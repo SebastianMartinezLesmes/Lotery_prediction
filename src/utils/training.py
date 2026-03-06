@@ -14,6 +14,8 @@ from src.utils.alerts import check_model_performance
 from src.utils.training_visualizer import TrainingVisualizer
 from src.utils.save_training import (guardar_modelo_si_mejora, crear_base_modelos_IA)
 
+from src.utils.mutation import entrenamiento_evolutivo
+
 ITERATIONS = 8000
 MIN_ACCURACY = 0.7
 
@@ -280,17 +282,22 @@ def entrenar_modelos(
             random_state=random_state
         )
 
-        modelo_result = entrenar_modelo_result(
+        modelo_result, acc_result = entrenamiento_evolutivo(
             X_train,
             y_train_result,
-            random_state,
-            warm_start_model=modelo_base_result
+            X_test,
+            y_test_result,
+            generaciones=10,
+            poblacion_size=10
         )
 
-        modelo_series = entrenar_modelo_series(
+        modelo_series, acc_series = entrenamiento_evolutivo(
             X_train,
             y_train_series,
-            warm_start_model=modelo_base_series
+            X_test,
+            y_test_series,
+            generaciones=10,
+            poblacion_size=10
         )
 
         acc_result, f1_result = evaluar_y_reportar(
@@ -353,7 +360,7 @@ def entrenar_modelos(
         if (
             acc_result >= min_acc and
             acc_series >= min_acc and
-            intento >= 100
+            intento >= 5
         ):
 
             recent_result = history["result_acc"][-50:]
