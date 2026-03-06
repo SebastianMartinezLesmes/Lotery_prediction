@@ -1,17 +1,17 @@
 import os
 import time
-import warnings
 import json
-import pandas as pd
 import joblib
+import warnings
 import numpy as np
+import pandas as pd
 
 from pathlib import Path
-from src.excel.read_excel import obtener_loterias_disponibles
 from datetime import datetime
 from openpyxl import load_workbook
 from src.core.config import settings
 from src.utils.training import entrenar_modelos_por_loteria
+from src.excel.read_excel import obtener_loterias_disponibles
 
 ARCHIVO_EXCEL = str(settings.get_excel_path())
 TIEMPOS_LOG = str(settings.LOGS_DIR / "tiempos.log")
@@ -211,7 +211,7 @@ def predecir_para_loteria(df, loteria):
     # Preparar datos históricos
     df_loteria = preparar_datos(df, loteria)
 
-    if len(df_loteria) < 10:
+    if len(df_loteria) < settings.TRAINING_CONFIG["min_records"]:
         print(f"⚠️  Datos insuficientes para {loteria}: {len(df_loteria)} registros")
         return
 
@@ -257,9 +257,9 @@ def predecir_para_loteria(df, loteria):
             y_result,
             y_series,
             loteria,
-            min_acc=0.7,
-            max_iter=3,
-            verbose=True
+            min_acc=settings.TRAINING_CONFIG["min_accuracy"],
+            max_iter=settings.TRAINING_CONFIG["max_iterations"],
+            verbose=True 
         )
 
         # buscar nuevamente después del entrenamiento
