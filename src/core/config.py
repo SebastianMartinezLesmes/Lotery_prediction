@@ -2,6 +2,7 @@
 Configuración centralizada del sistema con soporte para múltiples entornos.
 """
 import os
+
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -102,7 +103,14 @@ class Settings:
     DATA_DIR: Path = BASE_DIR / os.getenv("DATA_DIR", "data")
     LOGS_DIR: Path = BASE_DIR / os.getenv("LOGS_DIR", "logs")
 
+    # ==========================
+    # CONFIGURACIÓN DE IA
+    # ==========================
+    TRAINING_MIN_ACCURACY = 0.7
+    TRAINING_MAX_ITER = 3
+    TRAINING_VERBOSE = True
 
+#-------------------------------------------------------------------------------------------------------
     # ======================================================
     # API CONFIG
     # ======================================================
