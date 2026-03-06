@@ -96,7 +96,7 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         logger.info("="*70)
         
         print(f"\n{'='*70}")
-        print("2. ENTRENAMIENTO DE MODELOS CON FEATURES AVANZADAS")
+        print("2. ENTRENAMIENTO DE MODELOS CON FEATURES AVANZADAS + Genetica IA")
         print('='*70)
         
         import pandas as pd
@@ -234,7 +234,7 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
                 y_series=y_s,
                 nombre_loteria=nombre_loteria,
                 min_acc=0.05,  # 5% para números (lotería es difícil)
-                max_iter=100,  # Reducido para entrenamiento más rápido
+                max_iter=10,  # Reducido para entrenamiento más rápido
                 verbose=True
             )
         
