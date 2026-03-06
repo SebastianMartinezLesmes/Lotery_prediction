@@ -2,12 +2,13 @@ import os
 import time
 import warnings
 import json
-from datetime import datetime
 import pandas as pd
 import joblib
 import numpy as np
 
+from pathlib import Path
 from src.excel.read_excel import obtener_loterias_disponibles
+from datetime import datetime
 from openpyxl import load_workbook
 from src.core.config import settings
 from src.utils.training import entrenar_modelos_por_loteria
@@ -32,6 +33,29 @@ def obtener_zodiaco(codigo):
     except:
         return str(codigo)
 
+
+def buscar_modelo(loteria, tipo):
+    carpeta = Path(settings.MODELS_DIR)
+    loteria = loteria.lower().replace(" ", "_")
+
+    patrones = [
+        f"1_{loteria}_{tipo}.pkl",
+        f"2_{loteria}_{tipo}.pkl"
+    ]
+
+    modelos = []
+
+    for p in patrones:
+        ruta = carpeta / p
+        if ruta.exists():
+            modelos.append(ruta)
+
+    if not modelos:
+        return None
+
+    # usar el más reciente
+    modelos.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    return modelos[0]
 
 def guardar_resultado(prediccion, modelo_usado=None, confianza=None):
     """
@@ -183,83 +207,126 @@ def predecir_para_loteria(df, loteria):
     Compatible con modelos básicos y avanzados.
     """
     inicio = time.time()
-    
+
     # Preparar datos históricos
     df_loteria = preparar_datos(df, loteria)
-    
+
     if len(df_loteria) < 10:
         print(f"⚠️  Datos insuficientes para {loteria}: {len(df_loteria)} registros")
         return
-    
-    # Cargar modelos
-    nombre_archivo = loteria.replace(" ", "_").lower()
-    modelo_result_path = os.path.join(CARPETA_MODELOS, f"modelo_result_{nombre_archivo}.pkl")
-    modelo_series_path = os.path.join(CARPETA_MODELOS, f"modelo_series_{nombre_archivo}.pkl")
 
-    if not os.path.exists(modelo_result_path) or not os.path.exists(modelo_series_path):
-        print(f"📚 Modelos no encontrados para {loteria}, entrenando...")
+    # Rutas de modelos
+    modelo_result_path = buscar_modelo(loteria, "result")
+    modelo_series_path = buscar_modelo(loteria, "series")
+
+    modelo_result = None
+    modelo_series = None
+
+    # =========================
+    # Verificar si existen modelos
+    # =========================
+
+    if modelo_result_path and modelo_series_path:
+
+        print(f"✓ Modelos encontrados para {loteria}")
+
+        payload_result = joblib.load(str(modelo_result_path))
+        payload_series = joblib.load(str(modelo_series_path))
+
+        # extraer modelo real
+        modelo_result = payload_result["model"] if isinstance(payload_result, dict) else payload_result
+        modelo_series = payload_series["model"] if isinstance(payload_series, dict) else payload_series
+        
+        # Si el modelo está guardado dentro de un dict
+        if isinstance(modelo_result, dict):
+            modelo_result = modelo_result["model"]
+
+        if isinstance(modelo_series, dict):
+            modelo_series = modelo_series["model"]
+
+    else:
+
+        print(f"📚 Modelos no encontrados para {loteria}, iniciando entrenamiento...")
+
         X = df_loteria[["dia", "mes", "anio", "dia_semana"]]
         y_result = df_loteria["result"]
         y_series = df_loteria["series"]
-        entrenar_modelos_por_loteria(X, y_result, y_series, loteria, min_acc=0.7, max_iter=3000, verbose=True)
 
-    modelo_result = joblib.load(modelo_result_path)
-    modelo_series = joblib.load(modelo_series_path)
+        entrenar_modelos_por_loteria(
+            X,
+            y_result,
+            y_series,
+            loteria,
+            min_acc=0.7,
+            max_iter=3,
+            verbose=True
+        )
 
-    # Detectar número de features que espera el modelo
-    try:
-        n_features = modelo_result.n_features_in_
-    except AttributeError:
-        # Si no tiene n_features_in_, asumir 4 (modelo básico)
-        n_features = 4
-    
-    # Generar features según lo que espera el modelo
-    if n_features == 4:
-        # Modelo básico: solo features temporales
-        hoy = datetime.today()
-        X_hoy = pd.DataFrame([{
-            "dia": hoy.day,
-            "mes": hoy.month,
-            "anio": hoy.year,
-            "dia_semana": hoy.weekday()
-        }])
-    else:
-        # Modelo avanzado: generar todas las features
-        X_hoy = generar_features_avanzadas(df_loteria)
-        
-        # Asegurar que tenemos exactamente las features que el modelo espera
-        # Rellenar con 0 las features faltantes
-        for i in range(n_features):
-            col_name = f"feature_{i}"
-            if col_name not in X_hoy.columns and len(X_hoy.columns) < n_features:
-                X_hoy[col_name] = 0
-        
-        # Si tenemos más columnas de las necesarias, tomar solo las primeras n_features
-        if len(X_hoy.columns) > n_features:
-            X_hoy = X_hoy.iloc[:, :n_features]
-        elif len(X_hoy.columns) < n_features:
-            # Rellenar con 0 hasta completar
-            for i in range(len(X_hoy.columns), n_features):
-                X_hoy[f"feature_{i}"] = 0
+        # buscar nuevamente después del entrenamiento
+        modelo_result_path = buscar_modelo(loteria, "result")
+        modelo_series_path = buscar_modelo(loteria, "series")
 
-    # Realizar predicción
-    numero = modelo_result.predict(X_hoy)[0]
-    simbolo_codificado = modelo_series.predict(X_hoy)[0]
-    simbolo = obtener_zodiaco(simbolo_codificado)
+        if not modelo_result_path or not modelo_series_path:
+            raise RuntimeError("Los modelos no se generaron correctamente.")
 
-    print(f"\n>> {loteria}:")
-    print(f"   Número: {str(numero).zfill(4)}")
-    print(f"   Símbolo: {simbolo}")
+        print("✓ Modelos generados correctamente, cargando...")
 
-    guardar_resultado({
+        payload_result = joblib.load(str(modelo_result_path))
+        payload_series = joblib.load(str(modelo_series_path))
+
+        modelo_result = payload_result["model"]
+        modelo_series = payload_series["model"]
+
+    # =========================
+    # Generar features
+    # =========================
+    features = generar_features_avanzadas(df_loteria)
+
+    # Asegurar columnas compatibles con el modelo
+    if hasattr(modelo_result, "feature_names_in_"):
+        columnas_modelo = modelo_result.feature_names_in_
+        features = features.reindex(columns=columnas_modelo, fill_value=0)
+
+    # =========================
+    # Predicción
+    # =========================
+    pred_result = modelo_result.predict(features)[0]
+    pred_series = modelo_series.predict(features)[0]
+
+    # Confianza si el modelo lo soporta
+    confianza = None
+    if hasattr(modelo_result, "predict_proba"):
+        confianza = np.max(modelo_result.predict_proba(features))
+
+    signo = obtener_zodiaco(pred_series)
+
+    resultado_final = {
         "loteria": loteria,
-        "numero": str(numero).zfill(4),
-        "simbolo": str(simbolo).zfill(3)
-    }, modelo_usado=f"modelo_result_{nombre_archivo}.pkl", confianza=None)
+        "numero": int(pred_result),
+        "serie": signo
+    }
+
+    print("\n🎯 PREDICCIÓN")
+    print(f"Lotería: {loteria}")
+    print(f"Número: {pred_result}")
+    print(f"Signo : {signo}")
+
+    if confianza:
+        print(f"Confianza modelo: {confianza:.2%}")
+
+    # Guardar resultado
+    guardar_resultado(
+        resultado_final,
+        modelo_usado="RandomForest",
+        confianza=float(confianza) if confianza else None
+    )
+
+    # Log de tiempo
     duracion = time.time() - inicio
-    os.makedirs("logs", exist_ok=True)
     with open(TIEMPOS_LOG, "a", encoding="utf-8") as f:
-        f.write(f"{loteria} | Tiempo: {duracion:.2f} s | Predicción completada\n")
+        f.write(f"{datetime.now()} | {loteria} | {duracion:.2f}s\n")
+
+    print(f"⏱ Tiempo de predicción: {duracion:.2f}s")
 
 def main():
     df = cargar_datos_excel()
