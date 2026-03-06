@@ -115,14 +115,28 @@ class Settings:
     # API CONFIG
     # ======================================================
 
-    API_URL: str = os.getenv(
-        "API_URL",
-        "https://api-resultadosloterias.com/api/results/"
-    )
-
-    FECHA_DEFECTO: str = os.getenv("FECHA_DEFECTO", "2023-02-01")
-
-
+    API_URL: str = os.getenv("BASE_URL", "https://superastro.com.co/historico.php")
+    CLAVES_UNICAS: list[str] = ["fecha", "lottery", "result", "series"]
+    SCRAPER_DELAY_DEFAULT: float = 1.0
+    SCRAPER_REQUEST_TIMEOUT: int = 10
+    zodiaco: dict[str,str] = {
+        'ARIES': 'ARI',
+        'TAURO': 'TAU',
+        'GEMINIS': 'GEM',
+        'GÉMINIS': 'GEM',
+        'CANCER': 'CAN',
+        'CÁNCER': 'CAN',
+        'LEO': 'LEO',
+        'VIRGO': 'VIR',
+        'LIBRA': 'LIB',
+        'ESCORPIO': 'ESC',
+        'ESCORPION': 'ESC',
+        'SAGITARIO': 'SAG',
+        'CAPRICORNIO': 'CAP',
+        'ACUARIO': 'ACU',
+        'PISCIS': 'PIS'
+    }
+    
     # ======================================================
     # LOTTERY CONFIG
     # ======================================================
@@ -180,15 +194,6 @@ class Settings:
 
     EXCEL_FILENAME: str = f"resultados_{FIND_LOTERY.lower()}.xlsx"
     RESULTS_JSON: str = "results.json"
-
-    CLAVES_UNICAS: list[str] = [
-        "lottery",
-        "slug",
-        "date",
-        "result",
-        "series"
-    ]
-
 
     # ======================================================
     # PATH HELPERS
