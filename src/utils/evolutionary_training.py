@@ -6,16 +6,16 @@ import os
 import json
 import joblib
 import numpy as np
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass, asdict
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score
 
-from src.core.config import settings
+from pathlib import Path
+from datetime import datetime
+from dataclasses import dataclass, asdict
+from typing import Dict, List, Tuple, Optional
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.ensemble import RandomForestClassifier
 from src.core.logger import LoggerManager
+from src.core.config import settings
 
 logger = LoggerManager.get_logger("evolutionary_training", "evolutionary.log")
 
@@ -82,55 +82,30 @@ class EvolutionaryTrainer:
     
     def _load_or_initialize_variants(self):
         """Carga variantes existentes o crea nuevas."""
+        
         if self.variants_file.exists():
             with open(self.variants_file, 'r') as f:
                 data = json.load(f)
                 self.variants = [ModelVariant.from_dict(v) for v in data]
+
             logger.info(f"Cargadas {len(self.variants)} variantes existentes")
+
         else:
-            # Crear 3 variantes iniciales con diferentes configuraciones
-            self.variants = [
-                ModelVariant(
-                    id=1,
-                    role="PRODUCTION",
-                    accuracy=0.0,
-                    f1_score=0.0,
-                    n_estimators=200,
-                    max_depth=4,
-                    min_samples_split=5,
-                    random_state=42,
-                    iterations_trained=0,
-                    last_improvement=0,
-                    created_at=datetime.now().isoformat()
-                ),
-                ModelVariant(
-                    id=2,
-                    role="EXPERIMENTAL_1",
-                    accuracy=0.0,
-                    f1_score=0.0,
-                    n_estimators=150,
-                    max_depth=6,
-                    min_samples_split=3,
-                    random_state=123,
-                    iterations_trained=0,
-                    last_improvement=0,
-                    created_at=datetime.now().isoformat()
-                ),
-                ModelVariant(
-                    id=3,
-                    role="EXPERIMENTAL_2",
-                    accuracy=0.0,
-                    f1_score=0.0,
-                    n_estimators=250,
-                    max_depth=3,
-                    min_samples_split=7,
-                    random_state=456,
-                    iterations_trained=0,
-                    last_improvement=0,
-                    created_at=datetime.now().isoformat()
+            self.variants = []
+
+            for variant_cfg in settings.MODEL_VARIANTS:
+                self.variants.append(
+                    ModelVariant(
+                        accuracy=0.0,
+                        f1_score=0.0,
+                        iterations_trained=0,
+                        last_improvement=0,
+                        created_at=datetime.now().isoformat(),
+                        **variant_cfg
+                    )
                 )
-            ]
-            logger.info("Creadas 3 variantes iniciales")
+
+            logger.info(f"Creadas {len(self.variants)} variantes iniciales")
     
     def _save_variants(self):
         """Guarda el estado de las variantes."""
@@ -188,19 +163,21 @@ class EvolutionaryTrainer:
             role=variant.role,
             accuracy=0.0,
             f1_score=0.0,
-            n_estimators=np.random.choice(mutations['n_estimators']),
-            max_depth=np.random.choice(mutations['max_depth']),
-            min_samples_split=np.random.choice(mutations['min_samples_split']),
-            random_state=np.random.randint(0, 10000),
+            n_estimators=np.random.choice(MODEL_MUTATION_RANGES['n_estimators']),
+            max_depth=np.random.choice(MODEL_MUTATION_RANGES['max_depth']),
+            min_samples_split=np.random.choice(MODEL_MUTATION_RANGES['min_samples_split']),
+            random_state=np.random.randint(*MODEL_RANDOM_STATE_RANGE),
             iterations_trained=0,
             last_improvement=0,
             created_at=datetime.now().isoformat()
         )
         
-        logger.info(f"Mutación creada para variante {variant.id}: "
-                   f"n_est={new_variant.n_estimators}, "
-                   f"depth={new_variant.max_depth}, "
-                   f"split={new_variant.min_samples_split}")
+        logger.info(
+            f"Mutación creada para variante {variant.id}: "
+            f"n_est={new_variant.n_estimators}, "
+            f"depth={new_variant.max_depth}, "
+            f"split={new_variant.min_samples_split}"
+        )
         
         return new_variant
     
@@ -372,76 +349,76 @@ class EvolutionaryTrainer:
         return "\n".join(lines)
 
 
-def entrenar_evolutivo(
-    X,
-    y_result,
-    y_series,
-    lottery_name: str,
-    max_iterations: int = 10000,
-    patience: int = 100,
-    verbose: bool = True
-) -> Dict:
-    """
-    Función de conveniencia para entrenar ambos modelos (result y series) evolutivamente.
-    
-    Returns:
-        Dict con modelos, accuracies y f1-scores
-    """
-    results = {}
-    
-    # Entrenar modelo result
-    logger.info(f"\n{'='*70}")
-    logger.info(f"Entrenando modelo RESULT para {lottery_name}")
-    logger.info('='*70)
-    
-    trainer_result = EvolutionaryTrainer(
-        lottery_name=lottery_name,
-        model_type="result",
-        max_iterations=max_iterations,
-        patience=patience
-    )
-    
-    model_result, acc_result, f1_result = trainer_result.train_evolutionary(
-        X, y_result, verbose=verbose
-    )
-    
-    if verbose:
-        print(trainer_result.get_variants_summary())
-    
-    results['result'] = {
-        'model': model_result,
-        'accuracy': acc_result,
-        'f1_score': f1_result,
-        'trainer': trainer_result
-    }
-    
-    # Entrenar modelo series
-    logger.info(f"\n{'='*70}")
-    logger.info(f"Entrenando modelo SERIES para {lottery_name}")
-    logger.info('='*70)
-    
-    trainer_series = EvolutionaryTrainer(
-        lottery_name=lottery_name,
-        model_type="series",
-        max_iterations=max_iterations,
-        patience=patience
-    )
-    
-    model_series, acc_series, f1_series = trainer_series.train_evolutionary(
-        X, y_series, verbose=verbose
-    )
-    
-    if verbose:
-        print(trainer_series.get_variants_summary())
-    
-    results['series'] = {
-        'model': model_series,
-        'accuracy': acc_series,
-        'f1_score': f1_series,
-        'trainer': trainer_series
-    }
-    
-    return results
+    def entrenar_evolutivo(
+        X,
+        y_result,
+        y_series,
+        lottery_name: str,
+        max_iterations: int = EVOLUTIONARY_MAX_ITERATIONS,
+        patience: int = EVOLUTIONARY_PATIENCE,
+        verbose: bool = True
+    ) -> Dict:
+        """
+        Función de conveniencia para entrenar ambos modelos (result y series) evolutivamente.
+        
+        Returns:
+            Dict con modelos, accuracies y f1-scores
+        """
+        results = {}
+        
+        # Entrenar modelo result
+        logger.info(f"\n{LOG_SEPARATOR}")
+        logger.info(f"Entrenando modelo RESULT para {lottery_name}")
+        logger.info(LOG_SEPARATOR)
+        
+        trainer_result = EvolutionaryTrainer(
+            lottery_name=lottery_name,
+            model_type="result",
+            max_iterations=max_iterations,
+            patience=patience
+        )
+        
+        model_result, acc_result, f1_result = trainer_result.train_evolutionary(
+            X, y_result, verbose=verbose
+        )
+        
+        if verbose:
+            print(trainer_result.get_variants_summary())
+        
+        results['result'] = {
+            'model': model_result,
+            'accuracy': acc_result,
+            'f1_score': f1_result,
+            'trainer': trainer_result
+        }
+        
+        # Entrenar modelo series
+        logger.info(f"\n{LOG_SEPARATOR}")
+        logger.info(f"Entrenando modelo SERIES para {lottery_name}")
+        logger.info(LOG_SEPARATOR)
+        
+        trainer_series = EvolutionaryTrainer(
+            lottery_name=lottery_name,
+            model_type="series",
+            max_iterations=max_iterations,
+            patience=patience
+        )
+        
+        model_series, acc_series, f1_series = trainer_series.train_evolutionary(
+            X, y_series, verbose=verbose
+        )
+        
+        if verbose:
+            print(trainer_series.get_variants_summary())
+        
+        results['series'] = {
+            'model': model_series,
+            'accuracy': acc_series,
+            'f1_score': f1_series,
+            'trainer': trainer_series
+        }
+        
+        return results
 
 
 if __name__ == "__main__":

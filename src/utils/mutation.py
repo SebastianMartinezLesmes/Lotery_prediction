@@ -1,7 +1,9 @@
 import random
 import numpy as np
+
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
+from src.core.config import settings
 
 
 # =========================
@@ -9,19 +11,14 @@ from sklearn.metrics import accuracy_score
 # =========================
 
 def crear_poblacion_inicial(size):
-
     poblacion = []
-
     for _ in range(size):
-
         params = {
-            "n_estimators": random.randint(50, 400),
-            "max_depth": random.choice([3,4,5,6,8,10,None]),
-            "min_samples_split": random.randint(2,10)
+            "n_estimators": random.randint(*settings.RF_N_ESTIMATORS_RANGE),
+            "max_depth": random.choice(settings.RF_MAX_DEPTH_OPTIONS),
+            "min_samples_split": random.randint(*settings.RF_MIN_SAMPLES_SPLIT_RANGE)
         }
-
         poblacion.append(params)
-
     return poblacion
 
 
@@ -30,22 +27,20 @@ def crear_poblacion_inicial(size):
 # =========================
 
 def mutar_parametros(params):
-
     nuevo = params.copy()
-
-    if random.random() < 0.4:
-        nuevo["n_estimators"] += random.randint(-50,50)
-
-    if random.random() < 0.4:
-        nuevo["max_depth"] = random.choice([3,4,5,6,8,10,None])
-
-    if random.random() < 0.4:
-        nuevo["min_samples_split"] = random.randint(2,10)
-
+    if random.random() < settings.MUTATION_PROBABILITY:
+        nuevo["n_estimators"] += random.randint(
+            -settings.MUTATION_ESTIMATOR_STEP,
+            settings.MUTATION_ESTIMATOR_STEP
+        )
+    if random.random() < settings.MUTATION_PROBABILITY:
+        nuevo["max_depth"] = random.choice(settings.RF_MAX_DEPTH_OPTIONS)
+    if random.random() < settings.MUTATION_PROBABILITY:
+        nuevo["min_samples_split"] = random.randint(
+            *settings.RF_MIN_SAMPLES_SPLIT_RANGE
+        )
     nuevo["n_estimators"] = max(10, nuevo["n_estimators"])
-
     return nuevo
-
 
 # =========================
 # Evaluar individuo
@@ -58,15 +53,10 @@ def evaluar_individuo(
     X_test,
     y_test
 ):
-
     model = RandomForestClassifier(**params)
-
     model.fit(X_train, y_train)
-
     pred = model.predict(X_test)
-
     acc = accuracy_score(y_test, pred)
-
     return acc, model
 
 
@@ -74,13 +64,11 @@ def evaluar_individuo(
 # Selección natural
 # =========================
 
-def seleccionar_mejores(resultados, top_k=5):
-
+def seleccionar_mejores(resultados, top_k=settings.EVOLUTION_ELITE_SIZE):
     resultados.sort(
         key=lambda x: x["accuracy"],
         reverse=True
     )
-
     return resultados[:top_k]
 
 
@@ -112,8 +100,8 @@ def entrenamiento_evolutivo(
     y_train,
     X_test,
     y_test,
-    generaciones=50,
-    poblacion_size=20
+    generaciones=settings.EVOLUTION_GENERATIONS,
+    poblacion_size=settings.EVOLUTION_POPULATION_SIZE
 ):
 
     poblacion = crear_poblacion_inicial(poblacion_size)
@@ -145,7 +133,10 @@ def entrenamiento_evolutivo(
                 mejor_acc = acc
                 mejor_modelo = model
 
-        elite = seleccionar_mejores(resultados, top_k=5)
+        elite = seleccionar_mejores(
+            resultados,
+            top_k=settings.EVOLUTION_ELITE_SIZE
+        )
 
         poblacion = crear_nueva_generacion(
             elite,

@@ -2,15 +2,21 @@
 Punto de entrada alternativo con CLI mejorado.
 Permite ejecutar componentes individuales o el pipeline completo.
 """
+import os
 import sys
 import argparse
-from typing import Optional
+import numpy as np
+import pandas as pd
 
-from src.core.logger import get_main_logger
+from typing import Optional
 from src.core.config import settings
+from src.core.logger import get_main_logger
+from src.api.superastro_scraper import SuperAstroScraper
+from src.utils.drop_cache import main as drop_cache_main
+from src.utils.prediction import main as prediction_main
+from src.utils.training import entrenar_modelos_por_loteria
 
 logger = get_main_logger()
-
 
 def ejecutar_limpieza() -> bool:
     """4. Limpia archivos de caché de Python."""
@@ -23,7 +29,6 @@ def ejecutar_limpieza() -> bool:
         print("4. LIMPIEZA DE CACHE")
         print('='*70)
         
-        from src.utils.drop_cache import main as drop_cache_main
         drop_cache_main()
         
         print("\n✅ Limpieza completada")
@@ -45,8 +50,6 @@ def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
         logger.info("="*70)
         logger.info("1. ACTUALIZACIÓN DE DATOS DESDE SUPERASTRO")
         logger.info("="*70)
-        
-        from src.api.superastro_scraper import SuperAstroScraper
         
         excel_path = settings.get_excel_path()
         
@@ -98,12 +101,6 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         print(f"\n{'='*70}")
         print("2. ENTRENAMIENTO DE MODELOS CON FEATURES AVANZADAS + Genetica IA")
         print('='*70)
-        
-        import pandas as pd
-        import numpy as np
-        import os
-        from src.core.config import settings
-        from src.utils.training import entrenar_modelos_por_loteria
         
         # Ruta al archivo Excel
         ruta_excel = settings.get_excel_path()
@@ -233,8 +230,8 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
                 y_result=y_r,
                 y_series=y_s,
                 nombre_loteria=nombre_loteria,
-                min_acc=0.05,  # 5% para números (lotería es difícil)
-                max_iter=10,  # Reducido para entrenamiento más rápido
+                min_acc=settings.TRAINING_CONFIG["min_accuracy"],
+                max_iter=settings.TRAINING_CONFIG["max_iterations"],
                 verbose=True
             )
         
@@ -266,8 +263,6 @@ def ejecutar_prediccion(loteria: Optional[str] = None) -> bool:
         print(f"\n{'='*70}")
         print("3. GENERACIÓN DE PREDICCIONES")
         print('='*70)
-        
-        from src.utils.prediction import main as prediction_main
         
         prediction_main()
         print("\n✅ Predicciones generadas")
@@ -312,17 +307,17 @@ def crear_parser() -> argparse.ArgumentParser:
         description="Sistema de Predicción de Lotería",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Ejemplos de uso:
-  python main.py                          # Ejecuta pipeline completo
-  python main.py --actualizar             # 1. Actualizar datos desde SuperAstro
-  python main.py --entrenar               # 2. Entrenar modelos ML
-  python main.py --predecir               # 3. Generar predicciones
-  python main.py --limpiar                # 4. Limpiar cache de Python
-  
-  # Con filtros
-  python main.py --actualizar --lottery luna     # Solo ASTRO LUNA
-  python main.py --entrenar --lottery "ASTRO LUNA"  # Entrenar solo ASTRO LUNA
-  python main.py --predecir --lottery ASTRO      # Predecir solo astros
+            Ejemplos de uso:
+            python main.py                          # Ejecuta pipeline completo
+            python main.py --actualizar             # 1. Actualizar datos desde SuperAstro
+            python main.py --entrenar               # 2. Entrenar modelos ML
+            python main.py --predecir               # 3. Generar predicciones
+            python main.py --limpiar                # 4. Limpiar cache de Python
+            
+            # Con filtros
+            python main.py --actualizar --lottery luna     # Solo ASTRO LUNA
+            python main.py --entrenar --lottery "ASTRO LUNA"  # Entrenar solo ASTRO LUNA
+            python main.py --predecir --lottery ASTRO      # Predecir solo astros
         """
     )
     
