@@ -31,7 +31,7 @@ class SuperAstroScraper:
     # Mapeo de signos a abreviaciones de 3 letras
     SIGNOS_MAP = settings.zodiaco
     
-    def __init__(self, delay_entre_requests: float = 1.0):
+    def __init__(self, delay_entre_requests: float = settings.SCRAPER_DELAY_DEFAULT):
         """
         Inicializa el scraper.
         
@@ -79,7 +79,7 @@ class SuperAstroScraper:
             
             logger.info(f"Obteniendo {loteria} para {fecha.strftime('%Y-%m-%d')}")
             
-            response = self.session.get(self.BASE_URL, timeout=10)
+            response = self.session.get(self.BASE_URL, timeout=settings.SCRAPER_REQUEST_TIMEOUT)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
