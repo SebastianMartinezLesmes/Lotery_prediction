@@ -230,8 +230,8 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
                 y_result=y_r,
                 y_series=y_s,
                 nombre_loteria=nombre_loteria,
-                min_acc=settings.TRAINING_CONFIG["min_accuracy"],
-                max_iter=settings.TRAINING_CONFIG["max_iterations"],
+                min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
+                max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
                 verbose=True
             )
         

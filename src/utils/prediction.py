@@ -211,7 +211,7 @@ def predecir_para_loteria(df, loteria):
     # Preparar datos históricos
     df_loteria = preparar_datos(df, loteria)
 
-    if len(df_loteria) < settings.TRAINING_CONFIG["min_records"]:
+    if len(df_loteria) < settings.TRAINING_CONFIGURE["min_records"]:
         print(f"⚠️  Datos insuficientes para {loteria}: {len(df_loteria)} registros")
         return
 
@@ -257,8 +257,8 @@ def predecir_para_loteria(df, loteria):
             y_result,
             y_series,
             loteria,
-            min_acc=settings.TRAINING_CONFIG["min_accuracy"],
-            max_iter=settings.TRAINING_CONFIG["max_iterations"],
+            min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
+            max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
             verbose=True 
         )
 

@@ -15,14 +15,19 @@ class Settings:
     """Configuración global del sistema."""
 
     # ======================================================
-    # MAIN CONFIG
+    # CONFIGURACIÓN DE IA
     # ======================================================
 
-    TRAINING_CONFIG = {
-        "min_accuracy": 0.05,
-        "max_iterations": 10,
-        "min_records": 50
+    TRAINING_CONFIGURE = {
+        "min_accuracy": 0.05,         # reemplaza TRAINING_MIN_ACCURACY
+        "iterations": 10,             # reemplaza ITERATIONS
+        "max_iterations": 15,         # reemplaza TRAINING_MAX_ITER
+        "max_training_logs": 3,       # reemplaza MAX_TRAINING_LOGS
+        "min_records": 50,            # reemplaza min_records del antiguo TRAINING_CONFIG
+        "training_verbose": True,     # reemplaza TRAINING_VERBOSE
+        "max_training_logs": 3      
     }
+
 
     MODEL_TYPES = ["result", "series"]
 
@@ -103,13 +108,6 @@ class Settings:
     DATA_DIR: Path = BASE_DIR / os.getenv("DATA_DIR", "data")
     LOGS_DIR: Path = BASE_DIR / os.getenv("LOGS_DIR", "logs")
 
-    # ==========================
-    # CONFIGURACIÓN DE IA
-    # ==========================
-    TRAINING_MIN_ACCURACY = 0.7
-    TRAINING_MAX_ITER = 3
-    TRAINING_VERBOSE = True
-
 #-------------------------------------------------------------------------------------------------------
     # ======================================================
     # API CONFIG
@@ -142,16 +140,6 @@ class Settings:
     # ======================================================
 
     FIND_LOTERY: str = os.getenv("FIND_LOTERY", "ASTRO")
-
-
-    # ======================================================
-    # TRAINING CONFIG
-    # ======================================================
-
-    ITERATIONS: int = int(os.getenv("ITERATIONS", "10"))
-    MIN_ACCURACY: float = float(os.getenv("MIN_ACCURACY", "0.7"))
-    MAX_TRAINING_LOGS: int = int(os.getenv("MAX_TRAINING_LOGS", "3"))
-
 
     # ======================================================
     # ADVANCED ML CONFIG

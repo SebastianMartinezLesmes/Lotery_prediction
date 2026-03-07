@@ -172,7 +172,7 @@ class TrainingLogger:
             Ruta del archivo guardado
         """
         if max_files_per_lottery is None:
-            max_files_per_lottery = settings.MAX_TRAINING_LOGS
+            max_files_per_lottery = settings.TRAINING_CONFIGURE["max_training_logs"],
         
         filename = f"training_{self.lottery_name}_{self.start_time.strftime('%Y%m%d_%H%M%S')}.json"
         filepath = self.log_dir / filename
