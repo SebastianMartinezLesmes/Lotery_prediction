@@ -3,21 +3,22 @@ import sys
 import joblib
 import warnings
 import numpy as np
+import pandas as pd
+
 from sklearn.metrics import (accuracy_score, f1_score, classification_report)
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.base import clone
-import numpy as np
-from sklearn.base import clone
+from src.core.config import settings
 from src.utils.alerts import check_model_performance
+from src.utils.mutation import entrenamiento_evolutivo
 from src.utils.training_visualizer import TrainingVisualizer
 from src.utils.save_training import (guardar_modelo_si_mejora, crear_base_modelos_IA)
 
-from src.utils.mutation import entrenamiento_evolutivo
 
-ITERATIONS = 8000
-MIN_ACCURACY = 0.7
+ITERATIONS = settings.TRAINING_CONFIGURE["iterations"],
+MIN_ACCURACY = settings.TRAINING_CONFIGURE["min_accuracy"]
 
 warnings.filterwarnings(
     "ignore",
@@ -49,8 +50,8 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
         X=X,
         y_result=y_result,
         y_series=y_series,
-        min_acc=min_acc,
-        max_iter=max_iter,
+        min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
+        max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
         verbose=verbose,
         save_models=True,
         enable_visualization=True,
@@ -69,11 +70,6 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
     
     check_model_performance(nombre_loteria, "result", acc_result, f1_result)
     check_model_performance(nombre_loteria, "series", acc_series, f1_series)
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.base import clone
-from sklearn.utils.class_weight import compute_class_weight
-import numpy as np
 
 
 def calcular_class_weights(y):
@@ -181,8 +177,8 @@ def cargar_mejor_modelo(nombre_loteria: str, tipo_modelo: str):
 def entrenar_modelos(
     X,
     y_result, y_series,
-    min_acc=MIN_ACCURACY,
-    max_iter=ITERATIONS,
+    min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
+    max_iter=settings.TRAINING_CONFIGURE["iterations"],
     verbose=False,
     save_models=True,
     enable_visualization=True,
@@ -423,7 +419,6 @@ def entrenar_modelos(
 if __name__ == "__main__":
     print("🚀 Ejecutando entrenamiento con datos reales desde 'data/resultados_astro.xlsx'...\n")
 
-    import pandas as pd
 
     # Ruta absoluta al archivo Excel en data/
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -476,8 +471,8 @@ if __name__ == "__main__":
             y_result=y_r,
             y_series=y_s,
             nombre_loteria=nombre_loteria,
-            min_acc=MIN_ACCURACY ,
-            max_iter=ITERATIONS,
+            min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
+            max_iter=settings.TRAINING_CONFIGURE["iterations"],
             verbose=True
         )
 
