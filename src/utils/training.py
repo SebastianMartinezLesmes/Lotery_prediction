@@ -17,7 +17,7 @@ from src.utils.training_visualizer import TrainingVisualizer
 from src.utils.save_training import (guardar_modelo_si_mejora, crear_base_modelos_IA)
 
 
-ITERATIONS = settings.TRAINING_CONFIGURE["iterations"],
+ITERATIONS = settings.TRAINING_CONFIGURE["iterations"]
 MIN_ACCURACY = settings.TRAINING_CONFIGURE["min_accuracy"]
 
 warnings.filterwarnings(
