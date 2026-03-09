@@ -101,13 +101,30 @@ def entrenamiento_evolutivo(
     X_test,
     y_test,
     generaciones=settings.EVOLUTION_GENERATIONS,
-    poblacion_size=settings.EVOLUTION_POPULATION_SIZE
+    poblacion_size=settings.EVOLUTION_POPULATION_SIZE,
+    modelo_base=None
 ):
-
-    poblacion = crear_poblacion_inicial(poblacion_size)
+    poblacion = crear_poblacion_inicial(poblacion_size - 1)
 
     mejor_modelo = None
     mejor_acc = 0
+
+    if modelo_base is None:
+        poblacion = crear_poblacion_inicial(poblacion_size)
+    else:
+        poblacion = crear_poblacion_inicial(poblacion_size - 1)
+        params_base = {
+            "n_estimators": modelo_base.n_estimators,
+            "max_depth": modelo_base.max_depth,
+            "min_samples_split": modelo_base.min_samples_split
+        }
+
+        poblacion.append(params_base)
+        pred = modelo_base.predict(X_test)
+        mejor_acc = accuracy_score(y_test, pred)
+        mejor_modelo = modelo_base
+
+        print(f"Baseline accuracy: {mejor_acc:.4f}")
 
     for g in range(generaciones):
 
