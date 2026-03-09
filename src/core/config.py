@@ -21,7 +21,7 @@ class Settings:
     TRAINING_CONFIGURE = {
         "min_accuracy": 0.05,         # reemplaza TRAINING_MIN_ACCURACY
         "iterations": 10,             # reemplaza ITERATIONS
-        "max_iterations": 15,         # reemplaza TRAINING_MAX_ITER
+        "max_iterations": 10,         # reemplaza TRAINING_MAX_ITER
         "max_training_logs": 3,       # reemplaza MAX_TRAINING_LOGS
         "min_records": 50,            # reemplaza min_records del antiguo TRAINING_CONFIG
         "training_verbose": True,     # reemplaza TRAINING_VERBOSE
@@ -39,7 +39,7 @@ class Settings:
     # EVOLUTIONARY TRAINING CONFIG
     # ======================================================
 
-    EVOLUTION_GENERATIONS = 50
+    EVOLUTION_GENERATIONS = 10
     EVOLUTION_POPULATION_SIZE = 20
     EVOLUTION_ELITE_SIZE = 5
 

@@ -284,7 +284,8 @@ def entrenar_modelos(
             X_test,
             y_test_result,
             generaciones=10,
-            poblacion_size=10
+            poblacion_size=10,
+            modelo_base=modelo_base_result
         )
 
         modelo_series, acc_series = entrenamiento_evolutivo(
@@ -293,7 +294,8 @@ def entrenar_modelos(
             X_test,
             y_test_series,
             generaciones=10,
-            poblacion_size=10
+            poblacion_size=10,
+            modelo_base=modelo_base_series
         )
 
         acc_result, f1_result = evaluar_y_reportar(
