@@ -12,18 +12,25 @@ Integra:
 import os
 import sys
 import joblib
-import pandas as pd
+import traceback
 import numpy as np
-from pathlib import Path
-from typing import Tuple, Dict, Any, Optional
+import pandas as pd
 
+from pathlib import Path
 from src.core.config import settings
+from sklearn.model_selection import train_test_split
+from src.utils.training_visualizer import TrainingVisualizer
 from src.utils.ml_advanced import (
     FeatureEngineer,
     AdvancedMLTrainer,
     BusinessMetrics
 )
-from src.utils.training_visualizer import TrainingVisualizer
+from typing import (
+    Tuple,
+    Dict,
+    Any,
+    Optional
+)
 
 
 def preparar_datos_avanzados(df: pd.DataFrame, enable_feature_engineering: bool = True) -> Tuple[pd.DataFrame, list]:
@@ -255,7 +262,6 @@ def entrenar_loteria_avanzado(
         print(f"{'='*60}")
     
     # Split para evaluación final
-    from sklearn.model_selection import train_test_split
     X_train, X_test, y_result_train, y_result_test = train_test_split(
         X, y_result, test_size=0.2, random_state=42
     )
@@ -376,7 +382,6 @@ def main():
             all_results[lottery] = results
         except Exception as e:
             print(f"\n!! Error entrenando {lottery}: {e}")
-            import traceback
             traceback.print_exc()
     
     # Resumen final

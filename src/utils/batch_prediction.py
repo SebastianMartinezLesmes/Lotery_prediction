@@ -4,14 +4,16 @@ Permite predecir múltiples fechas de una vez de manera eficiente.
 """
 import os
 import json
+import joblib
+import argparse
+import pandas as pd
+
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
-import pandas as pd
-import joblib
-from pathlib import Path
-
-from src.core.config import settings
 from src.core.logger import get_logger
+from src.core.config import settings
+from src.excel.read_excel import obtener_loterias_disponibles
 
 logger = get_logger(__name__)
 
@@ -164,7 +166,6 @@ def predecir_batch_todas_loterias(
     Returns:
         Diccionario con predicciones por lotería
     """
-    from src.excel.read_excel import obtener_loterias_disponibles
     
     if loterias is None:
         loterias = obtener_loterias_disponibles()
@@ -236,7 +237,6 @@ def mostrar_predicciones_batch(
 
 def main():
     """Función principal para pruebas."""
-    import argparse
     
     parser = argparse.ArgumentParser(description="Predicciones por lotes")
     parser.add_argument(

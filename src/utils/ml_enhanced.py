@@ -10,37 +10,39 @@ Autor: Sistema de Predicción de Lotería
 Fecha: Febrero 2026
 """
 
+import warnings
 import numpy as np
 import pandas as pd
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional, Any
-from collections import Counter
-import warnings
+import xgboost as xgb
+import lightgbm as lgb
 
+from datetime import datetime
+from collections import Counter
+from typing import Dict, List, Tuple, Optional, Any
+
+from skopt import BayesSearchCV
+from skopt.space import Real, Integer, Categorical
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.calibration import CalibratedClassifierCV
 
+
 warnings.filterwarnings('ignore')
 
 # Importar algoritmos avanzados
 try:
-    import xgboost as xgb
     XGBOOST_AVAILABLE = True
 except ImportError:
     XGBOOST_AVAILABLE = False
 
 try:
-    import lightgbm as lgb
     LIGHTGBM_AVAILABLE = True
 except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 # Importar optimización bayesiana
 try:
-    from skopt import BayesSearchCV
-    from skopt.space import Real, Integer, Categorical
     BAYESIAN_AVAILABLE = True
 except ImportError:
     BAYESIAN_AVAILABLE = False

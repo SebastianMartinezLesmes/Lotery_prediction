@@ -4,12 +4,12 @@ Proporciona barras de progreso, gráficos y reportes en tiempo real.
 """
 import sys
 import time
-from typing import Dict, List, Optional
-from datetime import datetime
 import json
-from pathlib import Path
 
+from pathlib import Path
+from datetime import datetime
 from src.core.config import settings
+from typing import Dict, List, Optional
 
 
 class TrainingProgressBar:

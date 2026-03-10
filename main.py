@@ -63,7 +63,7 @@ def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
         print('='*70)
         
         # Crear scraper
-        scraper = SuperAstroScraper(delay_entre_requests=1.0)
+        scraper = SuperAstroScraper(delay_entre_requests = 1.0)
         
         # Actualizar loterías
         df_nuevos = scraper.actualizar_todas_loterias(

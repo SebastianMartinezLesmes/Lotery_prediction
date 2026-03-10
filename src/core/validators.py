@@ -1,8 +1,9 @@
 """
 Validadores de datos y funciones de utilidad para validación.
 """
-from typing import List, Optional
 import pandas as pd
+
+from typing import List, Optional
 from src.models.schemas import LotteryResult
 from src.core.exceptions import DataValidationError, InsufficientDataError
 from src.core.logger import get_main_logger

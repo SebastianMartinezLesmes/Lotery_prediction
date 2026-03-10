@@ -11,28 +11,29 @@ Incluye:
 
 import numpy as np
 import pandas as pd
+import warnings
+import xgboost as xgb
+import lightgbm as lgb
+
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional, Any
-from sklearn.model_selection import StratifiedKFold, GridSearchCV, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
+from sklearn.model_selection import StratifiedKFold, GridSearchCV, RandomizedSearchCV
+from sklearn.metrics import ( 
     accuracy_score, f1_score, precision_score, recall_score,
     make_scorer, classification_report
 )
-import warnings
 
 warnings.filterwarnings('ignore')
 
 # Importar algoritmos avanzados si están disponibles
 try:
-    import xgboost as xgb
     XGBOOST_AVAILABLE = True
 except ImportError:
     XGBOOST_AVAILABLE = False
     print("!! XGBoost no disponible. Instalar con: pip install xgboost")
 
 try:
-    import lightgbm as lgb
     LIGHTGBM_AVAILABLE = True
 except ImportError:
     LIGHTGBM_AVAILABLE = False
