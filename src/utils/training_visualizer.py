@@ -172,7 +172,7 @@ class TrainingLogger:
             Ruta del archivo guardado
         """
         if max_files_per_lottery is None:
-            max_files_per_lottery = settings.TRAINING_CONFIGURE["max_training_logs"],
+            max_files_per_lottery = settings.TRAINING_CONFIGURE["max_training_logs"]
         
         filename = f"training_{self.lottery_name}_{self.start_time.strftime('%Y%m%d_%H%M%S')}.json"
         filepath = self.log_dir / filename
@@ -211,7 +211,11 @@ class TrainingLogger:
         """
         # Buscar todos los archivos de entrenamiento de esta lotería
         pattern = f"training_{self.lottery_name}_*.json"
-        training_files = list(self.log_dir.glob(pattern))
+        training_files = sorted(
+            self.log_dir.glob(pattern),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
         
         # Si hay más archivos que el máximo permitido
         if len(training_files) > max_files:
@@ -292,12 +296,12 @@ Estadisticas Generales:
 Modelo Result (Numeros):
    * Mejor Accuracy: {best_result_acc:.4f}
    * Promedio Accuracy: {avg_result_acc:.4f}
-   * Mejor F1-Score: {max(self.history["result_f1"]):.4f}
+   * Mejor F1-Score: {max(self.history["result_f1"]) if self.history["result_f1"] else 0}
 
 Modelo Series (Simbolos):
    * Mejor Accuracy: {best_series_acc:.4f}
    * Promedio Accuracy: {avg_series_acc:.4f}
-   * Mejor F1-Score: {max(self.history["series_f1"]):.4f}
+   * Mejor F1-Score: {max(self.history["series_f1"]) if self.history["series_f1"] else 0}
 
 Progreso:
    * Primera iteracion: Result={self.history["result_acc"][0]:.4f}, Series={self.history["series_acc"][0]:.4f}
