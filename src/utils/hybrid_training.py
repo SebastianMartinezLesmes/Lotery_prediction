@@ -16,11 +16,14 @@ Cada variante compite y evoluciona con todas las mejoras.
 """
 import numpy as np
 import pandas as pd
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass, asdict
 import json
 import joblib
+import xgboost as xgb
+import lightgbm as lgb
+
+from datetime import datetime
+from dataclasses import dataclass, asdict
+from typing import Dict, List, Tuple, Optional
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -38,13 +41,11 @@ from src.utils.ml_enhanced import (
 
 # Importar algoritmos avanzados
 try:
-    import xgboost as xgb
     XGBOOST_AVAILABLE = True
 except ImportError:
     XGBOOST_AVAILABLE = False
 
 try:
-    import lightgbm as lgb
     LIGHTGBM_AVAILABLE = True
 except ImportError:
     LIGHTGBM_AVAILABLE = False
