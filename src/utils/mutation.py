@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 # =========================
-# Crear población inicial
+# Probabilidad de mutación
 # =========================
 
 def probabilidad_mutacion(generacion, max_generaciones):
@@ -52,8 +52,17 @@ def crear_poblacion_inicial(size):
 
 def crossover(padre1, padre2):
     hijo = {}
+
     for key in padre1.keys():
-        hijo[key] = random.choice([padre1[key], padre2[key]])
+
+        if isinstance(padre1[key], int) and isinstance(padre2[key], int):
+            hijo[key] = random.choice([
+                padre1[key],
+                padre2[key],
+                (padre1[key] + padre2[key]) // 2
+            ])
+        else:
+            hijo[key] = random.choice([padre1[key], padre2[key]])
 
     return hijo
 
@@ -89,6 +98,7 @@ def mutar_parametros(params, generacion, max_generaciones):
         nuevo["max_features"] = random.choice(["sqrt","log2",None])
 
     nuevo["n_estimators"] = max(10, nuevo["n_estimators"])
+    nuevo["min_samples_split"] = max(2, nuevo["min_samples_split"])
     return nuevo
 
 
@@ -223,7 +233,6 @@ def entrenamiento_evolutivo(
         
         gen_best = max(resultados, key=lambda x: x["accuracy"])
         gen_best_acc = gen_best["accuracy"]
-        gen_best_params = gen_best["params"]
 
         elite = seleccionar_mejores(
             resultados,
