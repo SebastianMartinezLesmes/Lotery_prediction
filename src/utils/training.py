@@ -5,16 +5,17 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics import (accuracy_score, f1_score, classification_report)
-from sklearn.utils.class_weight import compute_class_weight
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.base import clone
 from src.core.config import settings
 from src.utils.alerts import check_model_performance
 from src.utils.mutation import entrenamiento_evolutivo
 from src.utils.training_visualizer import TrainingVisualizer
 from src.utils.save_training import (guardar_modelo_si_mejora, crear_base_modelos_IA)
+
+from sklearn.metrics import (accuracy_score, f1_score, classification_report)
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.base import clone
 
 
 ITERATIONS = settings.TRAINING_CONFIGURE["iterations"]
@@ -285,7 +286,8 @@ def entrenar_modelos(
             y_test_result,
             generaciones=10,
             poblacion_size=10,
-            modelo_base=modelo_base_result
+            modelo_base=modelo_base_result, 
+            tipo_modelo="R"
         )
 
         modelo_series, acc_series = entrenamiento_evolutivo(
@@ -295,7 +297,8 @@ def entrenar_modelos(
             y_test_series,
             generaciones=10,
             poblacion_size=10,
-            modelo_base=modelo_base_series
+            modelo_base=modelo_base_series,
+            tipo_modelo="S"
         )
 
         acc_result, f1_result = evaluar_y_reportar(

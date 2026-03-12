@@ -102,7 +102,8 @@ def entrenamiento_evolutivo(
     y_test,
     generaciones=settings.EVOLUTION_GENERATIONS,
     poblacion_size=settings.EVOLUTION_POPULATION_SIZE,
-    modelo_base=None
+    modelo_base=None,
+    tipo_modelo="R"
 ):
     poblacion = crear_poblacion_inicial(poblacion_size - 1)
 
@@ -161,10 +162,11 @@ def entrenamiento_evolutivo(
         )
 
         print(
-            f"Gen {g} | Best accuracy: {mejor_acc:.4f}"
+            f"Gen {g} | Best accuracy {tipo_modelo}: {mejor_acc:.4f}"
         )
 
     if mejor_modelo is None:
+        
         # fallback seguro
         mejor_modelo = RandomForestClassifier()
         mejor_modelo.fit(X_train, y_train)
