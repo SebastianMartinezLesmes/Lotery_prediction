@@ -83,12 +83,12 @@ class TrainingProgressBar:
         
         # Construir línea de progreso (SIN BARRA)
         line = (
-            f"\r{improvement_icon} {iteration}/{self.total} ({progress*100:.1f}%) | "
-            f"Time: {elapsed_str}/{remaining_str} | "
-            f"Result: {result_acc:.4f} ({result_f1:.4f}) | "
-            f"Series: {series_acc:.4f} ({series_f1:.4f}) | "
+            f"\n \r{improvement_icon} {iteration}/{self.total} ({progress*100:.1f}%) | "
+            f"Time: {remaining_str} | "
+            f"Result: {result_f1:.4f} | "
+            f"Series: {series_f1:.4f} | "
             f"Best: R={self.best_result_acc:.4f} S={self.best_series_acc:.4f} | "
-            f"Improvements: {self.improvements}"
+            f"Improvements: {self.improvements} \n"
         )
         
         sys.stdout.write(line)
