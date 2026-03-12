@@ -78,9 +78,10 @@ def mutar_parametros(params, generacion, max_generaciones):
     prob = probabilidad_mutacion(generacion, max_generaciones)
 
     if random.random() < prob:
-        nuevo["n_estimators"] += random.randint(
-            -settings.MUTATION_ESTIMATOR_STEP,
-            settings.MUTATION_ESTIMATOR_STEP
+        delta = int(nuevo["n_estimators"] * 0.3)
+        nuevo["n_estimators"] = random.randint(
+            max(10, nuevo["n_estimators"] - delta),
+            nuevo["n_estimators"] + delta
         )
 
     if random.random() < prob:
@@ -204,20 +205,18 @@ def entrenamiento_evolutivo(
         mejor_acc = accuracy_score(y_test, pred)
         mejor_modelo = modelo_base
 
-        print(f"Baseline accuracy: {mejor_acc:.4f}")
+        print(f"\n Baseline accuracy: {mejor_acc:.4f} \n")
 
     for g in range(generaciones):
 
         # Evaluación paralela
-
-        resultados_eval = Parallel(n_jobs=-1)(
+        resultados_eval = Parallel(n_jobs=settings.N_JOBS)(
             delayed(evaluar_individuo)( params, X_train, y_train, X_test, y_test )
             for params in poblacion
         )
 
         resultados = []
 
-        
         for params, (acc, model) in zip(poblacion, resultados_eval):
 
             resultados.append({
@@ -225,7 +224,6 @@ def entrenamiento_evolutivo(
                 "model": model,
                 "params": params
             })
-
             
             if acc > mejor_acc:
                 mejor_acc = acc
@@ -246,12 +244,11 @@ def entrenamiento_evolutivo(
             generaciones
         )
 
-        # ---------------------
-        # Log
-        # ---------------------
+        poblacion[0] = elite[0]["params"]
 
+        # Log de las generaciones
         print(
-            f"Gen {g+1}/{generaciones} | Best accuracy {tipo_modelo}: {gen_best_acc:.4f}"
+            f"Gen {g+1}/{generaciones} | Best acc {tipo_modelo}: {gen_best_acc:.4f}"
         )
         
     if mejor_modelo is None:
