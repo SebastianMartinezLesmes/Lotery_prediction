@@ -37,38 +37,34 @@ def obtener_zodiaco(codigo):
 
 
 def buscar_mejor_modelo(loteria, tipo):
-
     carpeta = Path(settings.MODELS_DIR)
     loteria = loteria.lower().replace(" ", "_")
-
     modelos = list(carpeta.glob(f"*_{loteria}_{tipo}.pkl"))
 
     if not modelos:
         return None, None, None
 
     mejor_modelo = None
-    mejor_score = -1
+    mejor_accuracy = -1
     mejor_payload = None
 
     for ruta in modelos:
-
         try:
             payload = joblib.load(ruta)
-
             if isinstance(payload, dict):
-                score = payload.get("score", 0)
+                accuracy = payload.get("accuracy", 0)
             else:
-                score = 0
+                accuracy = 0
 
-            if score > mejor_score:
-                mejor_score = score
+            if accuracy > mejor_accuracy:
+                mejor_accuracy = accuracy
                 mejor_modelo = ruta
                 mejor_payload = payload
 
         except Exception:
             continue
 
-    return mejor_modelo, mejor_payload, mejor_score
+    return mejor_modelo, mejor_payload, mejor_accuracy
 
 
 def guardar_resultado(prediccion, modelo_usado=None, confianza=None):
@@ -172,8 +168,8 @@ def predecir_para_loteria(df, loteria):
         modelo_result = result_payload["model"]
         modelo_series = series_payload["model"]
 
-        print(f"✓ Mejor modelo RESULT: {result_path.name} | score={result_score:.4f}")
-        print(f"✓ Mejor modelo SERIES: {series_path.name} | score={series_score:.4f}")
+        print(f"✓ Mejor modelo RESULT: {result_path.name} | Accuracy={result_score:.4f}")
+        print(f"✓ Mejor modelo SERIES: {series_path.name} | Accuracy={series_score:.4f}")
 
     else:
 
@@ -284,7 +280,7 @@ def predecir_para_loteria(df, loteria):
         f.write(f"{datetime.now()} | {loteria} | {duracion:.2f}s\n")
 
     print(f"⏱ Tiempo de predicción: {duracion:.2f}s")
-    
+
 
 def main(filtro_loteria=None):
     df = cargar_datos_excel()
