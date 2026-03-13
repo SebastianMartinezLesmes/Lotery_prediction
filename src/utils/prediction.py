@@ -12,6 +12,8 @@ from openpyxl import load_workbook
 from src.core.config import settings
 from src.utils.training import entrenar_modelos_por_loteria
 from src.excel.read_excel import obtener_loterias_disponibles
+from src.features.feature_engineering import generar_features
+
 
 ARCHIVO_EXCEL = str(settings.get_excel_path())
 TIEMPOS_LOG = str(settings.LOGS_DIR / "tiempos.log")
@@ -123,73 +125,6 @@ def cargar_datos_excel():
     return pd.DataFrame(data)
 
 
-def generar_features_avanzadas(df, fecha_prediccion=None):
-    """
-    Genera features avanzadas para predicción.
-    Compatible con modelos entrenados con feature engineering.
-    
-    Args:
-        df: DataFrame con datos históricos
-        fecha_prediccion: Fecha para la cual predecir (default: hoy)
-    
-    Returns:
-        DataFrame con features generadas
-    """
-    if fecha_prediccion is None:
-        fecha_prediccion = datetime.today()
-    
-    # Features básicas
-    features = {
-        "dia": fecha_prediccion.day,
-        "mes": fecha_prediccion.month,
-        "anio": fecha_prediccion.year,
-        "dia_semana": fecha_prediccion.weekday()
-    }
-    
-    # Si hay datos históricos, generar features avanzadas
-    if len(df) > 0:
-        # Ordenar por fecha
-        df = df.sort_values("fecha")
-        
-        # Features de lag (últimos valores)
-        if len(df) >= 1:
-            features["result_lag_1"] = df["result"].iloc[-1]
-        if len(df) >= 2:
-            features["result_lag_2"] = df["result"].iloc[-2]
-        if len(df) >= 3:
-            features["result_lag_3"] = df["result"].iloc[-3]
-        
-        # Features de rolling (promedios móviles)
-        if len(df) >= 7:
-            features["result_rolling_mean_7"] = df["result"].iloc[-7:].mean()
-            features["result_rolling_std_7"] = df["result"].iloc[-7:].std()
-        
-        if len(df) >= 30:
-            features["result_rolling_mean_30"] = df["result"].iloc[-30:].mean()
-            features["result_rolling_std_30"] = df["result"].iloc[-30:].std()
-        
-        # Features de tendencia
-        if len(df) >= 7:
-            ultimos_7 = df["result"].iloc[-7:].values
-            features["tendencia_7"] = 1 if ultimos_7[-1] > ultimos_7[0] else 0
-        
-        # Features de frecuencia
-        if len(df) >= 30:
-            ultimos_30 = df["result"].iloc[-30:]
-            features["result_freq_mean"] = ultimos_30.mean()
-            features["result_freq_std"] = ultimos_30.std()
-        
-        # Features temporales adicionales
-        features["dia_mes"] = fecha_prediccion.day
-        features["semana_anio"] = fecha_prediccion.isocalendar()[1]
-        features["trimestre"] = (fecha_prediccion.month - 1) // 3 + 1
-        features["es_fin_semana"] = 1 if fecha_prediccion.weekday() >= 5 else 0
-        features["es_inicio_mes"] = 1 if fecha_prediccion.day <= 7 else 0
-        features["es_fin_mes"] = 1 if fecha_prediccion.day >= 23 else 0
-    
-    return pd.DataFrame([features])
-
-
 def preparar_datos(df, loteria):
     """Prepara datos para una lotería específica."""
     df = df[df["lottery"].str.upper() == loteria.upper()]
@@ -203,8 +138,7 @@ def preparar_datos(df, loteria):
 
 def predecir_para_loteria(df, loteria):
     """
-    Genera predicción para una lotería específica.
-    Compatible con modelos básicos y avanzados.
+    Genera predicción para una lotería específica usando features avanzadas.
     """
     inicio = time.time()
 
@@ -215,89 +149,83 @@ def predecir_para_loteria(df, loteria):
         print(f"⚠️  Datos insuficientes para {loteria}: {len(df_loteria)} registros")
         return
 
-    # Rutas de modelos
+    # =========================
+    # Buscar modelos existentes
+    # =========================
     modelo_result_path = buscar_modelo(loteria, "result")
     modelo_series_path = buscar_modelo(loteria, "series")
 
     modelo_result = None
     modelo_series = None
-
-    # =========================
-    # Verificar si existen modelos
-    # =========================
+    reentrenar = False
 
     if modelo_result_path and modelo_series_path:
-
-        print(f"✓ Modelos encontrados para {loteria}")
-
         payload_result = joblib.load(str(modelo_result_path))
         payload_series = joblib.load(str(modelo_series_path))
 
-        # extraer modelo real
         modelo_result = payload_result["model"] if isinstance(payload_result, dict) else payload_result
         modelo_series = payload_series["model"] if isinstance(payload_series, dict) else payload_series
-        
-        # Si el modelo está guardado dentro de un dict
-        if isinstance(modelo_result, dict):
-            modelo_result = modelo_result["model"]
 
-        if isinstance(modelo_series, dict):
-            modelo_series = modelo_series["model"]
+        # Reentrenar si hay datos nuevos
+        ultima_fecha_modelo = getattr(modelo_result, "ultima_fecha", None)
+        if ultima_fecha_modelo is None or df_loteria["fecha"].max() > ultima_fecha_modelo:
+            print(f"🔄 Nuevos datos detectados para {loteria}, reentrenando modelo...")
+            reentrenar = True
+    else:
+        print(f"📚 Modelos no encontrados para {loteria}, iniciando entrenamiento...")
+        reentrenar = True
+
+    # =========================
+    # Generar features avanzadas para entrenamiento
+    # =========================
+    X_train_df = generar_features(df_loteria)
+    df_loteria = df_loteria.tail(len(X_train_df))
+
+    X_train = X_train_df.values
+    y_result = df_loteria["result"].values
+    y_series = df_loteria["series"].astype(str).str.upper().astype("category").cat.codes.values
+
+    if reentrenar:
+        modelo_result, modelo_series = entrenar_modelos_por_loteria(
+            X_train, y_result, y_series, loteria,
+            min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
+            max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
+            verbose=True
+        )
+
+    # =========================
+    # Generar features de predicción
+    # =========================
+
+    features = X_train_df.tail(1).values
+
+    # =========================
+    # Verificar compatibilidad con el modelo
+    # =========================
+
+    if hasattr(modelo_result, "n_features_in_"):
+        if features.shape[1] != modelo_result.n_features_in_:
+            raise ValueError(
+                f"El modelo espera {modelo_result.n_features_in_} features "
+                f"pero recibió {features.shape[1]}"
+            )
+
+    if hasattr(modelo_result, "predict_proba"):
+
+        pred_probs = modelo_result.predict_proba(features)[0]
+
+        # clase con mayor probabilidad
+        idx = np.argmax(pred_probs)
+
+        pred_result = modelo_result.classes_[idx]
+        confianza = float(pred_probs[idx])
 
     else:
 
-        print(f"📚 Modelos no encontrados para {loteria}, iniciando entrenamiento...")
+        pred_result = modelo_result.predict(features)[0]
+        confianza = None
 
-        X = df_loteria[["dia", "mes", "anio", "dia_semana"]]
-        y_result = df_loteria["result"]
-        y_series = df_loteria["series"]
-
-        entrenar_modelos_por_loteria(
-            X,
-            y_result,
-            y_series,
-            loteria,
-            min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
-            max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
-            verbose=True 
-        )
-
-        # buscar nuevamente después del entrenamiento
-        modelo_result_path = buscar_modelo(loteria, "result")
-        modelo_series_path = buscar_modelo(loteria, "series")
-
-        if not modelo_result_path or not modelo_series_path:
-            raise RuntimeError("Los modelos no se generaron correctamente.")
-
-        print("✓ Modelos generados correctamente, cargando...")
-
-        payload_result = joblib.load(str(modelo_result_path))
-        payload_series = joblib.load(str(modelo_series_path))
-
-        modelo_result = payload_result["model"]
-        modelo_series = payload_series["model"]
-
-    # =========================
-    # Generar features
-    # =========================
-    features = generar_features_avanzadas(df_loteria)
-
-    # Asegurar columnas compatibles con el modelo
-    if hasattr(modelo_result, "feature_names_in_"):
-        columnas_modelo = modelo_result.feature_names_in_
-        features = features.reindex(columns=columnas_modelo, fill_value=0)
-
-    # =========================
-    # Predicción
-    # =========================
-    pred_result = modelo_result.predict(features)[0]
     pred_series = modelo_series.predict(features)[0]
-
-    # Confianza si el modelo lo soporta
-    confianza = None
-    if hasattr(modelo_result, "predict_proba"):
-        confianza = np.max(modelo_result.predict_proba(features))
-
     signo = obtener_zodiaco(pred_series)
 
     resultado_final = {
@@ -306,29 +234,33 @@ def predecir_para_loteria(df, loteria):
         "serie": signo
     }
 
+    # =========================
+    # Mostrar resultados
+    # =========================
     print("\n🎯 PREDICCIÓN")
     print(f"Lotería: {loteria}")
     print(f"Número: {pred_result}")
     print(f"Signo : {signo}")
-
     if confianza:
         print(f"Confianza modelo: {confianza:.2%}")
 
+    # =========================
     # Guardar resultado
+    # =========================
     guardar_resultado(
         resultado_final,
         modelo_usado="RandomForest",
         confianza=float(confianza) if confianza else None
     )
 
-    # Log de tiempo
     duracion = time.time() - inicio
     with open(TIEMPOS_LOG, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} | {loteria} | {duracion:.2f}s\n")
 
     print(f"⏱ Tiempo de predicción: {duracion:.2f}s")
 
-def main():
+
+def main(filtro_loteria=None):
     df = cargar_datos_excel()
     if df.empty:
         print("!! No se pudieron cargar datos del archivo.")
@@ -336,6 +268,8 @@ def main():
 
     loterias = obtener_loterias_disponibles()
     print(f"\nLoterías detectadas: {loterias}")
+    if filtro_loteria:
+        loterias = [l for l in loterias if filtro_loteria.lower() in l.lower()]
 
     for loteria in loterias:
         print(f"\n>> Procesando: {loteria}")

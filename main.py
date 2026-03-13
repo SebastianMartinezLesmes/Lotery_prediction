@@ -15,6 +15,7 @@ from src.api.superastro_scraper import SuperAstroScraper
 from src.utils.drop_cache import main as drop_cache_main
 from src.utils.prediction import main as prediction_main
 from src.utils.training import entrenar_modelos_por_loteria
+from src.features.feature_engineering import generar_features
 
 logger = get_main_logger()
 
@@ -204,26 +205,14 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
             # Rellenar NaN con 0
             df_loteria = df_loteria.fillna(0)
             
-            # Seleccionar features para entrenamiento
-            feature_cols = [
-                "dia", "mes", "anio", "dia_semana",
-                "dia_mes", "semana_anio", "trimestre",
-                "es_fin_semana", "es_inicio_mes", "es_fin_mes",
-                "result_lag_1", "result_lag_2", "result_lag_3",
-                "result_rolling_mean_7", "result_rolling_std_7",
-                "result_rolling_mean_30", "result_rolling_std_30",
-                "tendencia_7",
-                "result_freq_mean", "result_freq_std"
-            ]
-            
-            X_l = df_loteria[feature_cols].values
+            X_l = X_df.values
             y_r = df_loteria["result"].values
             y_s = df_loteria["series"].values
             
             print(f"\nDatos preparados:")
             print(f"  Registros: {len(X_l)}")
-            print(f"  Features: {len(feature_cols)}")
-            print(f"  Features usadas: {', '.join(feature_cols[:5])}... (+{len(feature_cols)-5} más)")
+            print(f"  Features: {len(X_df.values)}")
+            print(f"  Features usadas: {', '.join(X_df.values[:5])}... (+{len(X_df.values)-5} más)")
             
             entrenar_modelos_por_loteria(
                 X=X_l,
@@ -264,7 +253,7 @@ def ejecutar_prediccion(loteria: Optional[str] = None) -> bool:
         print("3. GENERACIÓN DE PREDICCIONES")
         print('='*70)
         
-        prediction_main()
+        prediction_main(loteria)
         print("\n✅ Predicciones generadas")
         return True
     except Exception as e:

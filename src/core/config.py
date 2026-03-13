@@ -21,7 +21,7 @@ class Settings:
     TRAINING_CONFIGURE = {
         "min_accuracy": 0.05,         # reemplaza TRAINING_MIN_ACCURACY
         "iterations": 2,             # reemplaza ITERATIONS
-        "max_iterations": 5,         # reemplaza TRAINING_MAX_ITER
+        "max_iterations": 2,         # reemplaza TRAINING_MAX_ITER
         "max_training_logs": 3,       # reemplaza MAX_TRAINING_LOGS
         "min_records": 50,            # reemplaza min_records del antiguo TRAINING_CONFIG
         "training_verbose": True,     # reemplaza TRAINING_VERBOSE
