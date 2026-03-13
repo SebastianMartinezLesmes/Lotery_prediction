@@ -39,9 +39,9 @@ class Settings:
     # EVOLUTIONARY TRAINING CONFIG
     # ======================================================
 
-    EVOLUTION_GENERATIONS = 10
-    EVOLUTION_POPULATION_SIZE = 20
-    EVOLUTION_ELITE_SIZE = 5
+    EVOLUTION_GENERATIONS = 150
+    EVOLUTION_POPULATION_SIZE = 120
+    EVOLUTION_ELITE_SIZE = 10
 
     EVOLUTIONARY_MAX_ITERATIONS = 10000
     EVOLUTIONARY_PATIENCE = 100
@@ -62,7 +62,11 @@ class Settings:
     mutations = {
         "n_estimators": [100, 150, 200, 250, 300],
         "max_depth": [3, 4, 5, 6, 7, 8],
-        "min_samples_split": [2, 3, 5, 7, 10]
+        "min_samples_split": [2, 3, 5, 7, 10],
+
+        "mutation_probability": 0.8,
+        "Mutation_estimator_step": 50,
+        "n_jobs": -1,
     }
 
     MODEL_RANDOM_STATE_RANGE = (0, 10000)

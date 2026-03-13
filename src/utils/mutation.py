@@ -67,18 +67,61 @@ def crossover(padre1, padre2):
     return hijo
 
 
-# =========================
-# Mutación genética
-# =========================
+# Direccion de mejora
 
-def mutar_parametros(params, generacion, max_generaciones):
+def mutar_hacia_mejor(params, mejor_params, fuerza=0.3):
 
     nuevo = params.copy()
 
-    prob = probabilidad_mutacion(generacion, max_generaciones)
+    for k in ["n_estimators","min_samples_split","min_samples_leaf"]:
 
+        if isinstance(params[k], int):
+
+            direccion = mejor_params[k] - params[k]
+
+            nuevo[k] = int(params[k] + direccion * fuerza)
+    return nuevo
+
+
+# Mutacion distante
+
+def mutacion_lejana(params):
+
+    nuevo = params.copy()
+
+    nuevo["n_estimators"] = random.randint(*settings.RF_N_ESTIMATORS_RANGE)
+    nuevo["max_depth"] = random.choice(settings.RF_MAX_DEPTH_OPTIONS)
+    nuevo["min_samples_split"] = random.randint(*settings.RF_MIN_SAMPLES_SPLIT_RANGE)
+
+    return nuevo
+
+
+# =========================
+# Mutación adaptativa
+# =========================
+
+def mutar_parametros(params, generacion, max_generaciones, mejor_params=None, stagnation=False):
+    """
+    params: individuo actual
+    mejor_params: parametros del mejor modelo hasta ahora
+    stagnation: si True, hacer mutación lejana
+    """
+    nuevo = params.copy()
+    prob = probabilidad_mutacion(generacion, max_generaciones)
+    exploration_factor = 1 - (generacion / max_generaciones)  # grande al inicio
+
+    if stagnation:
+        # Mutación lejana para escapar del estancamiento
+        return mutacion_lejana(nuevo)
+
+    # Si hay un mejor modelo, mutamos hacia él con cierta fuerza
+    if mejor_params and random.random() < prob:
+        fuerza = 0.3 + 0.4 * exploration_factor  # más fuerza al inicio
+        nuevo = mutar_hacia_mejor(nuevo, mejor_params, fuerza=fuerza)
+
+    # Mutaciones aleatorias
     if random.random() < prob:
-        delta = int(nuevo["n_estimators"] * 0.3)
+        delta = int(nuevo["n_estimators"] * (0.5 * exploration_factor))
         nuevo["n_estimators"] = random.randint(
             max(10, nuevo["n_estimators"] - delta),
             nuevo["n_estimators"] + delta
@@ -88,9 +131,7 @@ def mutar_parametros(params, generacion, max_generaciones):
         nuevo["max_depth"] = random.choice(settings.RF_MAX_DEPTH_OPTIONS)
 
     if random.random() < prob:
-        nuevo["min_samples_split"] = random.randint(
-            *settings.RF_MIN_SAMPLES_SPLIT_RANGE
-        )
+        nuevo["min_samples_split"] = random.randint(*settings.RF_MIN_SAMPLES_SPLIT_RANGE)
 
     if random.random() < prob:
         nuevo["min_samples_leaf"] = random.randint(1,5)
@@ -149,21 +190,20 @@ def seleccionar_mejores(resultados, top_k=settings.EVOLUTION_ELITE_SIZE):
 # Nueva generación
 # =========================
 
-def crear_nueva_generacion(elite, poblacion_size, generacion, max_generaciones):
-
+def crear_nueva_generacion(elite, poblacion_size, generacion, max_generaciones, mejor_params=None, stagnation=False):
     nueva = [e["params"] for e in elite]
 
     while len(nueva) < poblacion_size:
-
         padre1 = random.choice(elite)["params"]
         padre2 = random.choice(elite)["params"]
 
         hijo = crossover(padre1, padre2)
-
         hijo = mutar_parametros(
             hijo,
             generacion,
-            max_generaciones
+            max_generaciones,
+            mejor_params=mejor_params,
+            stagnation=stagnation
         )
         nueva.append(hijo)
     return nueva
@@ -183,6 +223,8 @@ def entrenamiento_evolutivo(
 ):
     mejor_modelo = None
     mejor_acc = 0
+    stagnation_counter = 0
+    direccion_mejora = None
 
     if modelo_base is None:
         poblacion = crear_poblacion_inicial(poblacion_size)
@@ -226,9 +268,15 @@ def entrenamiento_evolutivo(
             })
             
             if acc > mejor_acc:
+                direccion_mejora = params
                 mejor_acc = acc
                 mejor_modelo = model
+                stagnation_counter = 0 
+            else:
+                stagnation_counter += 1
         
+        stagnation = stagnation_counter > 6
+
         gen_best = max(resultados, key=lambda x: x["accuracy"])
         gen_best_acc = gen_best["accuracy"]
 
@@ -241,7 +289,9 @@ def entrenamiento_evolutivo(
             elite,
             poblacion_size,
             g,
-            generaciones
+            generaciones,
+            mejor_params=direccion_mejora,
+            stagnation=stagnation
         )
 
         poblacion[0] = elite[0]["params"]
