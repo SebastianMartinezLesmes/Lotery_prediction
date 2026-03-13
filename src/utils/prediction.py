@@ -36,28 +36,40 @@ def obtener_zodiaco(codigo):
         return str(codigo)
 
 
-def buscar_modelo(loteria, tipo):
+def buscar_mejor_modelo(loteria, tipo):
+
     carpeta = Path(settings.MODELS_DIR)
     loteria = loteria.lower().replace(" ", "_")
 
-    patrones = [
-        f"1_{loteria}_{tipo}.pkl",
-        f"2_{loteria}_{tipo}.pkl"
-    ]
-
-    modelos = []
-
-    for p in patrones:
-        ruta = carpeta / p
-        if ruta.exists():
-            modelos.append(ruta)
+    modelos = list(carpeta.glob(f"*_{loteria}_{tipo}.pkl"))
 
     if not modelos:
-        return None
+        return None, None, None
 
-    # usar el más reciente
-    modelos.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-    return modelos[0]
+    mejor_modelo = None
+    mejor_score = -1
+    mejor_payload = None
+
+    for ruta in modelos:
+
+        try:
+            payload = joblib.load(ruta)
+
+            if isinstance(payload, dict):
+                score = payload.get("score", 0)
+            else:
+                score = 0
+
+            if score > mejor_score:
+                mejor_score = score
+                mejor_modelo = ruta
+                mejor_payload = payload
+
+        except Exception:
+            continue
+
+    return mejor_modelo, mejor_payload, mejor_score
+
 
 def guardar_resultado(prediccion, modelo_usado=None, confianza=None):
     """
@@ -137,71 +149,77 @@ def preparar_datos(df, loteria):
 
 
 def predecir_para_loteria(df, loteria):
-    """
-    Genera predicción para una lotería específica usando features avanzadas.
-    """
+
     inicio = time.time()
 
-    # Preparar datos históricos
     df_loteria = preparar_datos(df, loteria)
 
     if len(df_loteria) < settings.TRAINING_CONFIGURE["min_records"]:
-        print(f"⚠️  Datos insuficientes para {loteria}: {len(df_loteria)} registros")
+        print(f"⚠️ Datos insuficientes para {loteria}: {len(df_loteria)} registros")
         return
 
     # =========================
-    # Buscar modelos existentes
+    # BUSCAR MEJOR MODELO
     # =========================
-    modelo_result_path = buscar_modelo(loteria, "result")
-    modelo_series_path = buscar_modelo(loteria, "series")
 
-    modelo_result = None
-    modelo_series = None
+    result_path, result_payload, result_score = buscar_mejor_modelo(loteria, "result")
+    series_path, series_payload, series_score = buscar_mejor_modelo(loteria, "series")
+
     reentrenar = False
 
-    if modelo_result_path and modelo_series_path:
-        payload_result = joblib.load(str(modelo_result_path))
-        payload_series = joblib.load(str(modelo_series_path))
+    if result_path and series_path:
 
-        modelo_result = payload_result["model"] if isinstance(payload_result, dict) else payload_result
-        modelo_series = payload_series["model"] if isinstance(payload_series, dict) else payload_series
+        modelo_result = result_payload["model"]
+        modelo_series = series_payload["model"]
 
-        # Reentrenar si hay datos nuevos
-        ultima_fecha_modelo = getattr(modelo_result, "ultima_fecha", None)
-        if ultima_fecha_modelo is None or df_loteria["fecha"].max() > ultima_fecha_modelo:
-            print(f"🔄 Nuevos datos detectados para {loteria}, reentrenando modelo...")
-            reentrenar = True
+        print(f"✓ Mejor modelo RESULT: {result_path.name} | score={result_score:.4f}")
+        print(f"✓ Mejor modelo SERIES: {series_path.name} | score={series_score:.4f}")
+
     else:
-        print(f"📚 Modelos no encontrados para {loteria}, iniciando entrenamiento...")
+
+        print(f"📚 No se encontraron modelos para {loteria}, entrenando...")
         reentrenar = True
 
     # =========================
-    # Generar features avanzadas para entrenamiento
+    # GENERAR FEATURES
     # =========================
+
     X_train_df = generar_features(df_loteria)
+
     df_loteria = df_loteria.tail(len(X_train_df))
 
     X_train = X_train_df.values
     y_result = df_loteria["result"].values
-    y_series = df_loteria["series"].astype(str).str.upper().astype("category").cat.codes.values
+    y_series = (
+        df_loteria["series"]
+        .astype(str)
+        .str.upper()
+        .astype("category")
+        .cat.codes
+        .values
+    )
+
+    # =========================
+    # ENTRENAR SI NO HAY MODELO
+    # =========================
 
     if reentrenar:
+
         modelo_result, modelo_series = entrenar_modelos_por_loteria(
-            X_train, y_result, y_series, loteria,
+            X_train,
+            y_result,
+            y_series,
+            loteria,
             min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
             max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
             verbose=True
         )
 
     # =========================
-    # Generar features de predicción
+    # FEATURES PARA PREDICCION
     # =========================
 
     features = X_train_df.tail(1).values
-
-    # =========================
-    # Verificar compatibilidad con el modelo
-    # =========================
 
     if hasattr(modelo_result, "n_features_in_"):
         if features.shape[1] != modelo_result.n_features_in_:
@@ -210,11 +228,14 @@ def predecir_para_loteria(df, loteria):
                 f"pero recibió {features.shape[1]}"
             )
 
+    # =========================
+    # PREDICCION NUMERO
+    # =========================
+
     if hasattr(modelo_result, "predict_proba"):
 
         pred_probs = modelo_result.predict_proba(features)[0]
 
-        # clase con mayor probabilidad
         idx = np.argmax(pred_probs)
 
         pred_result = modelo_result.classes_[idx]
@@ -225,7 +246,12 @@ def predecir_para_loteria(df, loteria):
         pred_result = modelo_result.predict(features)[0]
         confianza = None
 
+    # =========================
+    # PREDICCION SIGNO
+    # =========================
+
     pred_series = modelo_series.predict(features)[0]
+
     signo = obtener_zodiaco(pred_series)
 
     resultado_final = {
@@ -235,18 +261,17 @@ def predecir_para_loteria(df, loteria):
     }
 
     # =========================
-    # Mostrar resultados
+    # MOSTRAR RESULTADO
     # =========================
+
     print("\n🎯 PREDICCIÓN")
     print(f"Lotería: {loteria}")
     print(f"Número: {pred_result}")
     print(f"Signo : {signo}")
+
     if confianza:
         print(f"Confianza modelo: {confianza:.2%}")
 
-    # =========================
-    # Guardar resultado
-    # =========================
     guardar_resultado(
         resultado_final,
         modelo_usado="RandomForest",
@@ -254,11 +279,12 @@ def predecir_para_loteria(df, loteria):
     )
 
     duracion = time.time() - inicio
+
     with open(TIEMPOS_LOG, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} | {loteria} | {duracion:.2f}s\n")
 
     print(f"⏱ Tiempo de predicción: {duracion:.2f}s")
-
+    
 
 def main(filtro_loteria=None):
     df = cargar_datos_excel()
