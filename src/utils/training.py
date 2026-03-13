@@ -69,8 +69,11 @@ def entrenar_modelos_por_loteria(X, y_result, y_series, nombre_loteria, min_acc=
     f1_result = history["result_f1"][-1] if history["result_f1"] else None
     f1_series = history["series_f1"][-1] if history["series_f1"] else None
     
+    # Verificar alertas
     check_model_performance(nombre_loteria, "result", acc_result, f1_result)
     check_model_performance(nombre_loteria, "series", acc_series, f1_series)
+
+    return mejor_modelo_result, mejor_modelo_series
 
 
 def calcular_class_weights(y):
