@@ -4,12 +4,12 @@ Proporciona barras de progreso, gráficos y reportes en tiempo real.
 """
 import sys
 import time
-from typing import Dict, List, Optional
-from datetime import datetime
 import json
-from pathlib import Path
 
+from pathlib import Path
+from datetime import datetime
 from src.core.config import settings
+from typing import Dict, List, Optional
 
 
 class TrainingProgressBar:
@@ -83,12 +83,12 @@ class TrainingProgressBar:
         
         # Construir línea de progreso (SIN BARRA)
         line = (
-            f"\r{improvement_icon} {iteration}/{self.total} ({progress*100:.1f}%) | "
-            f"Time: {elapsed_str}/{remaining_str} | "
-            f"Result: {result_acc:.4f} ({result_f1:.4f}) | "
-            f"Series: {series_acc:.4f} ({series_f1:.4f}) | "
+            f"\n \r{improvement_icon} {iteration}/{self.total} ({progress*100:.1f}%) | "
+            f"Time: {remaining_str} | "
+            f"Result: {result_f1:.4f} | "
+            f"Series: {series_f1:.4f} | "
             f"Best: R={self.best_result_acc:.4f} S={self.best_series_acc:.4f} | "
-            f"Improvements: {self.improvements}"
+            f"Improvements: {self.improvements} \n"
         )
         
         sys.stdout.write(line)
@@ -172,7 +172,7 @@ class TrainingLogger:
             Ruta del archivo guardado
         """
         if max_files_per_lottery is None:
-            max_files_per_lottery = settings.MAX_TRAINING_LOGS
+            max_files_per_lottery = settings.TRAINING_CONFIGURE["max_training_logs"]
         
         filename = f"training_{self.lottery_name}_{self.start_time.strftime('%Y%m%d_%H%M%S')}.json"
         filepath = self.log_dir / filename
@@ -211,7 +211,11 @@ class TrainingLogger:
         """
         # Buscar todos los archivos de entrenamiento de esta lotería
         pattern = f"training_{self.lottery_name}_*.json"
-        training_files = list(self.log_dir.glob(pattern))
+        training_files = sorted(
+            self.log_dir.glob(pattern),
+            key=lambda x: x.stat().st_mtime,
+            reverse=True
+        )
         
         # Si hay más archivos que el máximo permitido
         if len(training_files) > max_files:
@@ -292,12 +296,12 @@ Estadisticas Generales:
 Modelo Result (Numeros):
    * Mejor Accuracy: {best_result_acc:.4f}
    * Promedio Accuracy: {avg_result_acc:.4f}
-   * Mejor F1-Score: {max(self.history["result_f1"]):.4f}
+   * Mejor F1-Score: {max(self.history["result_f1"]) if self.history["result_f1"] else 0}
 
 Modelo Series (Simbolos):
    * Mejor Accuracy: {best_series_acc:.4f}
    * Promedio Accuracy: {avg_series_acc:.4f}
-   * Mejor F1-Score: {max(self.history["series_f1"]):.4f}
+   * Mejor F1-Score: {max(self.history["series_f1"]) if self.history["series_f1"] else 0}
 
 Progreso:
    * Primera iteracion: Result={self.history["result_acc"][0]:.4f}, Series={self.history["series_acc"][0]:.4f}

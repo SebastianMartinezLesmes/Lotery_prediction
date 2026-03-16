@@ -1,202 +1,95 @@
-# Tareas del Sistema de Predicción de Lotería
+1️⃣ Problema principal
 
-## 🎯 Estado Actual del Proyecto
+Modelo fijo cargado: Una vez que cargas un modelo entrenado (joblib.load), sus parámetros y predicciones no cambian. Si tu conjunto de entrenamiento no incluye el nuevo dato, el modelo siempre predice basado en patrones antiguos.
 
-**Última actualización:** 2026-03-02
+Features insuficientes: Actualmente estás usando:
 
----
+X = df_loteria[["dia", "mes", "anio", "dia_semana"]]
 
-## ✅ Funcionalidades Principales Implementadas
+Es decir, solo fechas, sin ninguna información histórica de los números que salieron antes (lag, rolling, frecuencia, tendencia). Tu función generar_features_avanzadas genera algunas features, pero solo se usan si entrenaste un modelo previamente con esas mismas features.
 
-### 1. Sistema de Actualización de Datos
-- [x] **Scraper oficial SuperAstro** - Obtiene datos desde https://superastro.com.co/historico.php
-- [x] **Actualización automática** - Detecta última fecha y actualiza hasta ayer
-- [x] **Filtrado de loterías** - Permite actualizar ASTRO SOL, ASTRO LUNA o ambas
-- [x] **Guardado en Excel** - Formato estructurado sin duplicados
-- [x] **Validación de datos** - Verifica integridad de números y signos zodiacales
+Secuencialidad ignorada: Las loterías son secuencias dependientes del tiempo. Un RandomForest entrenado solo con valores “categoricales y fechas” no aprende patrones secuenciales reales, especialmente si los datos cambian cada día.
 
-### 2. Sistema de Entrenamiento
-- [x] **Entrenamiento básico** - RandomForest con features temporales
-- [x] **Entrenamiento híbrido** - Múltiples algoritmos compitiendo (RF, XGBoost, LightGBM)
-- [x] **Entrenamiento mejorado** - Features de frecuencia + calibración + optimización bayesiana
-- [x] **Early stopping** - Detiene cuando no mejora en 50 iteraciones
-- [x] **Gestión de modelos** - Guarda solo los mejores modelos (.pkl)
-- [x] **Logs de entrenamiento** - Historial completo en JSON
+2️⃣ Cómo mejorar la predicción
+a) Usar features históricas correctamente
 
-### 3. Sistema de Predicción
-- [x] **Predicción básica** - Genera predicción del próximo número
-- [x] **Predicción mejorada** - Con confianza calibrada y recomendaciones
-- [x] **Batch predictions** - Predicciones para múltiples fechas
-- [x] **Guardado de resultados** - Formato JSON estructurado
+Debes entrenar el modelo con features basadas en los últimos N resultados, tal como haces en generar_features_avanzadas. Por ejemplo:
 
-### 4. Sistema de Limpieza
-- [x] **Limpieza de cache** - Elimina archivos __pycache__
-- [x] **Limpieza automática** - Se ejecuta al final del pipeline
+result_lag_1, result_lag_2, result_lag_3 → últimos 3 resultados.
 
----
+result_rolling_mean_7, result_rolling_std_7 → promedio y desviación últimos 7 días.
 
-## 🚀 Mejoras Implementadas
+tendencia_7 → si la secuencia sube o baja.
 
-### Arquitectura y Código
-- [x] Configuración centralizada con `.env`
-- [x] Manejo de errores con excepciones personalizadas
-- [x] Validación de datos con Pydantic
-- [x] Type hints en todo el código
-- [x] Estructura modular profesional
-- [x] CLI simplificado (4 opciones principales)
+frecuencia → cuántas veces ha aparecido cada número.
 
-### Machine Learning
-- [x] Validación cruzada estratificada
-- [x] Optimización de hiperparámetros (Grid/Random/Bayesian)
-- [x] Múltiples algoritmos (RandomForest, XGBoost, LightGBM)
-- [x] Feature engineering avanzado (40+ features)
-- [x] Features de frecuencia y patrones
-- [x] Calibración de probabilidades
-- [x] Métricas de negocio (ROI, confianza)
+Si solo pasas ["dia", "mes", "anio", "dia_semana"] al predecir, el modelo ignora todo el historial, y por eso siempre predice lo mismo.
 
-### Datos
-- [x] Scraper oficial SuperAstro (100% confiable)
-- [x] Actualización incremental automática
-- [x] Guardado estructurado en Excel
-- [x] Deduplicación automática
+b) Re-entrenar el modelo con datos actualizados
 
-### Monitoreo
-- [x] Sistema de alertas (accuracy bajo umbral)
-- [x] Logs estructurados en JSON
-- [x] Visualización de entrenamientos
-- [x] Métricas en tiempo real
+Cada vez que entrenas con nuevos resultados, el modelo debe re-entrenarse con el historial completo. En tu código:
 
-### Infraestructura
-- [x] Containerización con Docker
-- [x] Scheduler para automatización
-- [x] Scripts de utilidad completos
-- [x] Documentación completa
+if modelo_result_path and modelo_series_path:
+    # cargas modelo existente
+else:
+    # entrenas desde cero
 
----
+Si siempre cargas el modelo existente, no se incorporan los nuevos datos.
+Solución: forzar re-entrenamiento o incrementar entrenamiento con los datos nuevos antes de predecir.
 
-## 📋 Tareas Pendientes (Opcionales)
+c) Considerar modelos secuenciales o de predicción probabilística
 
-### Mejoras de Performance
-- [X] **Paralelización** - Entrenar múltiples loterías en paralelo
-- [ ] **Paralelización** - Hacer varios entrenamientos paralelamente a la misma loteria
-                           Ejemplo: python main.py --entrenar --lottery luna
-- [ ] **Cache inteligente** - Guardar datos procesados en Parquet
-- [ ] **Modelo multi-tarea** - Un modelo para todas las loterías
+RandomForest funciona bien para patrones estáticos, pero no captura dependencias de secuencia.
 
-### Mejoras de Datos
-- [ ] **Versionado de datos** - Usar DVC para trackear cambios
-- [ ] **Data augmentation** - Generar datos sintéticos (SMOTE)
-- [ ] **Pipeline ETL** - Automatización con Airflow/Prefect
+Opciones mejores:
 
-### Infraestructura Avanzada
-- [ ] **API REST** - Exponer predicciones vía FastAPI
-- [ ] **Base de datos** - Migrar de Excel a PostgreSQL/MongoDB
-- [ ] **CI/CD** - GitHub Actions para tests y deployment
-- [ ] **Rate limiting** - Controlar llamadas al scraper
+XGBoost o LightGBM con features de lag y rolling.
 
-### Testing
-- [ ] **Tests unitarios** - Pytest para funciones críticas
-- [ ] **Tests de integración** - Validar pipeline completo
-- [ ] **Tests de performance** - Benchmarks de velocidad
+Modelos de series temporales: ARIMA, Prophet, o incluso LSTM/RNN si quieres deep learning.
 
-### Documentación
-- [ ] **API docs** - Swagger/OpenAPI si se crea API
-- [X] **Video tutoriales** - Guías de uso en video
-- [X] **Casos de uso** - Ejemplos reales de uso
+Estas opciones aprenden patrones secuenciales y te darán resultados distintos a medida que cambian los datos.
 
----
+d) Predecir con “feature engineering dinámico”
 
-## 📊 Estadísticas del Proyecto
+Cuando generas features para la fecha de predicción, asegúrate de:
 
-### Completadas: 35+ tareas principales
-### Pendientes: 13 tareas opcionales
-### Progreso: ~73% de funcionalidad completa
+features = generar_features_avanzadas(df_loteria, fecha_prediccion=datetime.today())
 
----
+y que estas mismas columnas fueron usadas en el entrenamiento. Sino, el modelo rellenará con ceros y predecirá lo mismo.
 
-## 🎯 Prioridades Actuales
+3️⃣ Ajustes concretos a tu código
 
-### Alta Prioridad
-1. ✅ Sistema de actualización funcionando
-2. ✅ Entrenamiento de modelos optimizado
-3. ✅ Predicciones confiables
-4. ✅ Documentación completa
+Usar features históricas completas al entrenar:
 
-### Media Prioridad
-- [ ] Tests unitarios
-- [ ] API REST
-- [ ] Paralelización
+X = generar_features_avanzadas(df_loteria)
+y_result = df_loteria["result"]
+y_series = df_loteria["series"]
 
-### Baja Prioridad
-- [ ] Data augmentation
-- [ ] Versionado de datos
-- [ ] CI/CD
+Esto reemplaza:
 
----
+X = df_loteria[["dia", "mes", "anio", "dia_semana"]]
 
-## 🔄 Flujo de Trabajo Actual
+Forzar re-entrenamiento con nuevos datos:
 
-```bash
-# 1. Actualizar datos (diario)
-python main.py --actualizar
+modelo_result, modelo_series = entrenar_modelos_por_loteria(
+    X, y_result, y_series, loteria,
+    min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
+    max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
+    verbose=True,
+    force=True  # nuevo parámetro para re-entrenar siempre
+)
 
-# 2. Entrenar modelos (semanal)
-python main.py --entrenar
+Verificar compatibilidad de features:
+Al predecir, usa:
 
-# 3. Generar predicciones (diario)
-python main.py --predecir
+features = generar_features_avanzadas(df_loteria)
+features = features.reindex(columns=modelo_result.feature_names_in_, fill_value=0)
 
-# 4. Limpiar cache (opcional)
-python main.py --limpiar
+Agregar aleatoriedad o muestreo de probabilidad (opcional):
+Si quieres que no siempre devuelva el mismo número:
 
-# O ejecutar todo de una vez
-python main.py
-```
+if hasattr(modelo_result, "predict_proba"):
+    pred_probs = modelo_result.predict_proba(features)[0]
+    pred_result = np.random.choice(modelo_result.classes_, p=pred_probs)
 
----
-
-## 📝 Notas Importantes
-
-1. **Scraper SuperAstro**: Fuente oficial 100% confiable
-2. **Formato de datos**: Excel con columnas estructuradas
-3. **Modelos**: Guardados en `IA_models/` como archivos .pkl (No se hace)
-4. **Logs**: Historial completo en `logs/`
-5. **Configuración**: Editable en archivo `.env`
-
----
-
-## 🎉 Logros Destacados
-
-- ✅ Sistema completamente funcional
-- ✅ Scraper oficial implementado
-- ✅ CLI simplificado a 4 opciones
-- ✅ Múltiples métodos de entrenamiento
-- ✅ Documentación completa
-- ✅ Código limpio y organizado
-- ✅ Compatible con Windows
-- ✅ Dockerizado y automatizable
-
----
-
-**El sistema está listo para uso en producción con las 4 funcionalidades principales implementadas y funcionando correctamente.**
-
-# propio
-
-1. Arquitectura de una IA evolutiva: crear documentacion de Genetic Algorithm aplicado a Hyperparameter Search.
-
-idea:
-Generación 0
-   ↓
-Crear población inicial de modelos
-   ↓
-Evaluar todos los modelos
-   ↓
-Seleccionar los mejores (elite)
-   ↓
-Mutar hiperparámetros
-   ↓
-Crear nueva generación
-   ↓
-Repetir N generaciones
-
-2. 
+Si quieres, puedo reescribir tu función predecir_para_loteria completa para que use las features históricas, re-entrene con datos nuevos, y produzca predicciones distintas cada vez, de forma automática. Esto resolvería completamente el problema del mismo número y signo siempre.
