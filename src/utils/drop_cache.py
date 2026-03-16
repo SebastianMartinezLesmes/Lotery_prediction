@@ -3,8 +3,8 @@ Módulo para limpiar archivos de cache de Python.
 Elimina todas las carpetas __pycache__ del proyecto.
 """
 import os
-import shutil
 import stat
+import shutil
 from pathlib import Path
 
 

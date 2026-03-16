@@ -5,14 +5,14 @@ Notifica cuando el accuracy cae bajo umbrales configurados.
 import os
 import json
 import smtplib
-from datetime import datetime
-from typing import Dict, List, Optional, Callable
+
 from pathlib import Path
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
-from src.core.config import settings
+from typing import Dict, List, Optional, Callable
 from src.core.logger import LoggerManager
+from src.core.config import settings
 
 logger = LoggerManager.get_logger(__name__, "alerts.log")
 

@@ -26,28 +26,12 @@ class SuperAstroScraper:
     Scraper para obtener resultados de SuperAstro desde el sitio oficial.
     """
     
-    BASE_URL = "https://superastro.com.co/historico.php"
+    BASE_URL = settings.API_URL
     
     # Mapeo de signos a abreviaciones de 3 letras
-    SIGNOS_MAP = {
-        'ARIES': 'ARI',
-        'TAURO': 'TAU',
-        'GEMINIS': 'GEM',
-        'GÉMINIS': 'GEM',
-        'CANCER': 'CAN',
-        'CÁNCER': 'CAN',
-        'LEO': 'LEO',
-        'VIRGO': 'VIR',
-        'LIBRA': 'LIB',
-        'ESCORPIO': 'ESC',
-        'ESCORPION': 'ESC',
-        'SAGITARIO': 'SAG',
-        'CAPRICORNIO': 'CAP',
-        'ACUARIO': 'ACU',
-        'PISCIS': 'PIS'
-    }
+    SIGNOS_MAP = settings.zodiaco
     
-    def __init__(self, delay_entre_requests: float = 1.0):
+    def __init__(self, delay_entre_requests: float = settings.SCRAPER_DELAY_DEFAULT):
         """
         Inicializa el scraper.
         
@@ -95,7 +79,7 @@ class SuperAstroScraper:
             
             logger.info(f"Obteniendo {loteria} para {fecha.strftime('%Y-%m-%d')}")
             
-            response = self.session.get(self.BASE_URL, timeout=10)
+            response = self.session.get(self.BASE_URL, timeout=settings.SCRAPER_REQUEST_TIMEOUT)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
