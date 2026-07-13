@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from openpyxl import load_workbook
 from src.core.config import settings
-from src.utils.training import entrenar_modelos_por_loteria
+from src.utils.training_simple import entrenar_modelos_por_loteria
 from src.excel.read_excel import obtener_loterias_disponibles
 from src.features.feature_engineering import generar_features
 
@@ -225,35 +225,53 @@ def predecir_para_loteria(df, loteria):
             )
 
     # =========================
-    # PREDICCION NUMERO
+    # PREDICCION NUMERO + SIGNO (Paso 6: top 3 con confianza)
     # =========================
 
-    if hasattr(modelo_result, "predict_proba"):
+    # Verificar compatibilidad de features
+    if hasattr(modelo_result, "n_features_in_"):
+        if features.shape[1] != modelo_result.n_features_in_:
+            raise ValueError(
+                f"El modelo espera {modelo_result.n_features_in_} features "
+                f"pero recibió {features.shape[1]}"
+            )
 
-        pred_probs = modelo_result.predict_proba(features)[0]
+    # Modelo compuesto (4 dígitos) o modelo clásico
+    from src.utils.training_simple import _ModeloCompuesto
 
-        idx = np.argmax(pred_probs)
-
-        pred_result = modelo_result.classes_[idx]
-        confianza = float(pred_probs[idx])
-
+    if isinstance(modelo_result, _ModeloCompuesto):
+        top3_numeros = modelo_result.top3_numeros(features)
+        pred_result  = top3_numeros[0][0]
+        confianza    = top3_numeros[0][1]
+    elif hasattr(modelo_result, "predict_proba"):
+        pred_probs_result = modelo_result.predict_proba(features)[0]
+        top3_idx     = np.argsort(pred_probs_result)[-3:][::-1]
+        top3_numeros = [(int(modelo_result.classes_[i]), float(pred_probs_result[i])) for i in top3_idx]
+        pred_result  = top3_numeros[0][0]
+        confianza    = top3_numeros[0][1]
     else:
+        pred_result  = int(modelo_result.predict(features)[0])
+        top3_numeros = [(pred_result, None)]
+        confianza    = None
 
-        pred_result = modelo_result.predict(features)[0]
-        confianza = None
-
-    # =========================
-    # PREDICCION SIGNO
-    # =========================
-
-    pred_series = modelo_series.predict(features)[0]
+    # Series / signo
+    if hasattr(modelo_series, "predict_proba"):
+        pred_probs_series = modelo_series.predict_proba(features)[0]
+        top3_series_idx   = np.argsort(pred_probs_series)[-3:][::-1]
+        top3_signos  = [(obtener_zodiaco(modelo_series.classes_[i]), float(pred_probs_series[i])) for i in top3_series_idx]
+        pred_series  = modelo_series.classes_[top3_series_idx[0]]
+    else:
+        pred_series  = modelo_series.predict(features)[0]
+        top3_signos  = [(obtener_zodiaco(pred_series), None)]
 
     signo = obtener_zodiaco(pred_series)
 
     resultado_final = {
-        "loteria": loteria,
-        "numero": int(pred_result),
-        "serie": signo
+        "loteria":      loteria,
+        "numero":       int(pred_result),
+        "serie":        signo,
+        "top3_numeros": top3_numeros,
+        "top3_signos":  top3_signos,
     }
 
     # =========================
@@ -261,12 +279,19 @@ def predecir_para_loteria(df, loteria):
     # =========================
 
     print("\n🎯 PREDICCIÓN")
-    print(f"Lotería: {loteria}")
-    print(f"Número: {pred_result}")
-    print(f"Signo : {signo}")
+    print(f"  Lotería : {loteria}")
+    print(f"  Número  : {str(pred_result).zfill(4)}   Signo: {signo}")
 
-    if confianza:
-        print(f"Confianza modelo: {confianza:.2%}")
+    if confianza is not None:
+        print(f"\n  Top 3 números:")
+        for num, prob in top3_numeros:
+            bar = "█" * max(1, int((prob or 0) * 20))
+            print(f"    {str(num).zfill(4)}  {(prob or 0):6.2%}  {bar}")
+
+        print(f"\n  Top 3 signos:")
+        for sg, prob in top3_signos:
+            bar = "█" * max(1, int((prob or 0) * 20))
+            print(f"    {sg}  {(prob or 0):6.2%}  {bar}")
 
     guardar_resultado(
         resultado_final,
