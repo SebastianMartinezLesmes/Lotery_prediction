@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
 from sklearn.metrics import accuracy_score
 from src.core.config import settings
 from joblib import Parallel, delayed

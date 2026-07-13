@@ -3,12 +3,14 @@ Configuración centralizada del sistema con soporte para múltiples entornos.
 """
 import os
 
+
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
 load_dotenv()
+
 
 
 class Settings:
@@ -144,7 +146,59 @@ class Settings:
     # LOTTERY CONFIG
     # ======================================================
 
+
+#-------------------------------------------------------------------------------------------------------
+    # ======================================================
+    # API CONFIG
+    # ======================================================
+
+    API_URL: str = os.getenv("BASE_URL", "https://superastro.com.co/historico.php")
+    CLAVES_UNICAS: list[str] = ["fecha", "lottery", "result", "series"]
+    SCRAPER_DELAY_DEFAULT: float = 1.0
+    SCRAPER_REQUEST_TIMEOUT: int = 10
+    zodiaco: dict[str,str] = {
+        'ARIES': 'ARI',
+        'TAURO': 'TAU',
+        'GEMINIS': 'GEM',
+        'GÉMINIS': 'GEM',
+        'CANCER': 'CAN',
+        'CÁNCER': 'CAN',
+        'LEO': 'LEO',
+        'VIRGO': 'VIR',
+        'LIBRA': 'LIB',
+        'ESCORPIO': 'ESC',
+        'ESCORPION': 'ESC',
+        'SAGITARIO': 'SAG',
+        'CAPRICORNIO': 'CAP',
+        'ACUARIO': 'ACU',
+        'PISCIS': 'PIS'
+    }
+    
+    # ======================================================
+    # LOTTERY CONFIG
+    # ======================================================
+
     FIND_LOTERY: str = os.getenv("FIND_LOTERY", "ASTRO")
+
+    # ======================================================
+    # ADVANCED ML CONFIG
+    # ======================================================
+
+    USE_ADVANCED_ML: bool = os.getenv(
+        "USE_ADVANCED_ML",
+        "false"
+    ).lower() == "true"
+
+    ML_ALGORITHM: str = os.getenv(
+        "ML_ALGORITHM",
+        "RandomForest"
+    )
+
+    HYPERPARAMETER_SEARCH: str = os.getenv(
+        "HYPERPARAMETER_SEARCH",
+        "random"
+    )
+
 
     # ======================================================
     # ADVANCED ML CONFIG
@@ -178,7 +232,24 @@ class Settings:
     # LOGGING
     # ======================================================
 
+
+    ENABLE_FEATURE_ENGINEERING: bool = os.getenv(
+        "ENABLE_FEATURE_ENGINEERING",
+        "true"
+    ).lower() == "true"
+
+
+    # ======================================================
+    # LOGGING
+    # ======================================================
+
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
+
+    # ======================================================
+    # FILE CONFIG
+    # ======================================================
+
 
 
     # ======================================================
@@ -192,15 +263,22 @@ class Settings:
     # PATH HELPERS
     # ======================================================
 
+
+    # ======================================================
+    # PATH HELPERS
+    # ======================================================
+
     @classmethod
     def get_excel_path(cls) -> Path:
         """Retorna la ruta completa al archivo Excel."""
         return cls.DATA_DIR / cls.EXCEL_FILENAME
 
+
     @classmethod
     def get_results_path(cls) -> Path:
         """Retorna la ruta completa al archivo de resultados JSON."""
         return cls.DATA_DIR / cls.RESULTS_JSON
+
 
     @classmethod
     def get_model_path(cls, lottery_name: str, model_type: str) -> Path:
@@ -209,6 +287,7 @@ class Settings:
         """
         filename = f"modelo_{model_type}_{lottery_name.lower().replace(' ', '_')}.pkl"
         return cls.MODELS_DIR / filename
+
 
     @classmethod
     def ensure_directories(cls) -> None:
@@ -219,7 +298,9 @@ class Settings:
 
 
 # Instancia global
+# Instancia global
 settings = Settings()
 
+# Crear directorios automáticamente
 # Crear directorios automáticamente
 settings.ensure_directories()
