@@ -3,14 +3,12 @@ Configuración centralizada del sistema con soporte para múltiples entornos.
 """
 import os
 
-
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
 load_dotenv()
-
 
 
 class Settings:
@@ -115,7 +113,6 @@ class Settings:
     DATA_DIR: Path = BASE_DIR / os.getenv("DATA_DIR", "data")
     LOGS_DIR: Path = BASE_DIR / os.getenv("LOGS_DIR", "logs")
 
-#-------------------------------------------------------------------------------------------------------
     # ======================================================
     # API CONFIG
     # ======================================================
