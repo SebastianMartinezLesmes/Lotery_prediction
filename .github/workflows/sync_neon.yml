@@ -1,0 +1,25 @@
+name: Sincronizar Neon
+
+on:
+  schedule:
+    - cron: '0 6 * * 1,3,5'   # lunes, miércoles y viernes a las 6am UTC
+  workflow_dispatch:            # también manual
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Sincronizar Neon
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: python -c "from src.database.sync import synchronize_database; synchronize_database()"

@@ -11,7 +11,6 @@ from datetime import datetime
 from openpyxl import load_workbook
 from src.core.config import settings
 from src.utils.training_simple import entrenar_modelos_por_loteria
-from src.excel.read_excel import obtener_loterias_disponibles
 from src.features.feature_engineering import generar_features
 
 
@@ -135,12 +134,14 @@ def cargar_datos_excel():
 
 def preparar_datos(df, loteria):
     """Prepara datos para una lotería específica."""
-    df = df[df["lottery"].str.upper() == loteria.upper()]
+    df = df[df["lottery"].str.upper() == loteria.upper()].copy()
     df = df.sort_values("fecha")
-    df["dia"] = df["fecha"].dt.day
-    df["mes"] = df["fecha"].dt.month
-    df["anio"] = df["fecha"].dt.year
-    df["dia_semana"] = df["fecha"].dt.weekday
+    # Garantizar que fecha sea datetime (viene como date desde Neon)
+    df["fecha"] = pd.to_datetime(df["fecha"])
+    df["dia"]       = df["fecha"].dt.day
+    df["mes"]       = df["fecha"].dt.month
+    df["anio"]      = df["fecha"].dt.year
+    df["dia_semana"]= df["fecha"].dt.weekday
     return df
 
 
@@ -161,20 +162,19 @@ def predecir_para_loteria(df, loteria):
     result_path, result_payload, result_score = buscar_mejor_modelo(loteria, "result")
     series_path, series_payload, series_score = buscar_mejor_modelo(loteria, "series")
 
-    reentrenar = False
+    if not (result_path and series_path):
+        print(
+            f"\n❌ No se encontraron modelos entrenados para '{loteria}'.\n"
+            f"   Ejecuta primero: python main.py --entrenar --lottery \"{loteria}\"\n"
+            f"   No se puede predecir sin modelos previos."
+        )
+        return
 
-    if result_path and series_path:
+    modelo_result = result_payload["model"]
+    modelo_series = series_payload["model"]
 
-        modelo_result = result_payload["model"]
-        modelo_series = series_payload["model"]
-
-        print(f"✓ Mejor modelo RESULT: {result_path.name} | Accuracy={result_score:.4f}")
-        print(f"✓ Mejor modelo SERIES: {series_path.name} | Accuracy={series_score:.4f}")
-
-    else:
-
-        print(f"📚 No se encontraron modelos para {loteria}, entrenando...")
-        reentrenar = True
+    print(f"✓ Mejor modelo RESULT: {result_path.name} | Accuracy={result_score:.4f}")
+    print(f"✓ Mejor modelo SERIES: {series_path.name} | Accuracy={series_score:.4f}")
 
     # =========================
     # GENERAR FEATURES
@@ -194,22 +194,6 @@ def predecir_para_loteria(df, loteria):
         .cat.codes
         .values
     )
-
-    # =========================
-    # ENTRENAR SI NO HAY MODELO
-    # =========================
-
-    if reentrenar:
-
-        modelo_result, modelo_series = entrenar_modelos_por_loteria(
-            X_train,
-            y_result,
-            y_series,
-            loteria,
-            min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
-            max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
-            verbose=True
-        )
 
     # =========================
     # FEATURES PARA PREDICCION
@@ -308,12 +292,58 @@ def predecir_para_loteria(df, loteria):
 
 
 def main(filtro_loteria=None):
-    df = cargar_datos_excel()
-    if df.empty:
-        print("!! No se pudieron cargar datos del archivo.")
+    # ── Sincronizar con Neon antes de predecir ────────────────────
+    try:
+        from src.database.sync import synchronize_database
+        synchronize_database(filtro_loteria=filtro_loteria)
+    except Exception as e_sync:
+        print(f"⚠️  Sincronización con Neon falló (usando datos locales): {e_sync}")
+
+    # ── Cargar datos desde Neon ───────────────────────────────────
+    df = None
+    loterias = []
+
+    try:
+        from src.database.connection import NeonConnection
+        from src.database.repository import LotteriaRepository
+
+        conn = NeonConnection()
+        repository = LotteriaRepository(conn)
+
+        loterias_neon = ["ASTRO SOL", "ASTRO LUNA"]
+        if filtro_loteria:
+            loterias_neon = [l for l in loterias_neon if filtro_loteria.upper() in l.upper()]
+
+        frames = []
+        for lot in loterias_neon:
+            try:
+                df_lot = repository.get_all_results(lot)
+                if not df_lot.empty:
+                    frames.append(df_lot)
+                    loterias.append(lot)
+            except Exception as e_lot:
+                print(f"⚠️  No se pudo cargar {lot} desde Neon: {e_lot}")
+
+        if frames:
+            df = pd.concat(frames, ignore_index=True)
+            print(f"Datos cargados desde Neon PostgreSQL: {len(df)} registros")
+        conn.close()
+    except Exception as e_neon:
+        print(f"⚠️  Neon no disponible, usando fallback Excel: {e_neon}")
+
+    # ── Fallback a Excel ──────────────────────────────────────────
+    if df is None or df.empty:
+        df = cargar_datos_excel()
+        if df.empty:
+            print("!! No se pudieron cargar datos.")
+            return
+        # Obtener loterías desde el Excel
+        loterias = sorted(df["lottery"].dropna().unique().tolist())
+
+    if not loterias:
+        print("!! No se encontraron loterías disponibles.")
         return
 
-    loterias = obtener_loterias_disponibles()
     print(f"\nLoterías detectadas: {loterias}")
     if filtro_loteria:
         loterias = [l for l in loterias if filtro_loteria.lower() in l.lower()]

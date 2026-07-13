@@ -219,7 +219,8 @@ class SuperAstroScraper:
         self,
         excel_path: str,
         loterias: Optional[List[str]] = None,
-        filtro: Optional[str] = None
+        filtro: Optional[str] = None,
+        repository=None,
     ) -> pd.DataFrame:
         """
         Actualiza las loterías especificadas.
@@ -228,6 +229,8 @@ class SuperAstroScraper:
             excel_path: Ruta al archivo Excel
             loterias: Lista de loterías a actualizar (opcional)
             filtro: Filtro para loterías (opcional)
+            repository: Instancia de LotteriaRepository para sincronizar
+                        también con Neon (opcional, compatibilidad hacia atrás).
         
         Returns:
             DataFrame con todos los resultados nuevos
@@ -279,11 +282,92 @@ class SuperAstroScraper:
                 logger.info(f"  - {loteria}: {count} resultados")
             logger.info('='*70)
             
+            # Sincronizar con Neon si se proporcionó un repository
+            if repository is not None:
+                try:
+                    for loteria_sync in df_nuevos['lottery'].unique():
+                        self.sincronizar_con_neon(str(loteria_sync), repository)
+                except Exception as e:
+                    logger.warning(f"Error al sincronizar con Neon: {e}")
+
             return df_nuevos
         else:
             logger.info("\nNo se obtuvieron resultados nuevos")
+            # Si se pasó un repository, intentar sincronizar con Neon aunque no haya
+            # registros nuevos para Excel (por si Neon está desactualizado)
+            if repository is not None:
+                try:
+                    for loteria in loterias:
+                        self.sincronizar_con_neon(loteria, repository)
+                except Exception as e:
+                    logger.warning(f"Error al sincronizar con Neon: {e}")
             return pd.DataFrame()
     
+    def sincronizar_con_neon(self, loteria: str, repository) -> int:
+        """
+        Sincroniza los resultados de la lotería con Neon PostgreSQL.
+
+        1. Obtiene MAX(fecha) de Neon via repository.get_last_date().
+        2. Si fecha == ayer, retorna 0 (ya actualizado).
+        3. Si no, obtiene todos los resultados de la página y filtra el rango.
+        4. Llama a repository.upsert_results() con los nuevos registros.
+        5. Retorna número de registros insertados/actualizados.
+
+        Args:
+            loteria:    Nombre de la lotería (ej: "ASTRO LUNA").
+            repository: Instancia de LotteriaRepository.
+
+        Returns:
+            Número de registros insertados/actualizados.
+        """
+        from datetime import datetime, timedelta
+
+        ayer = (datetime.now() - timedelta(days=1)).date()
+
+        # 1. Última fecha en Neon
+        ultima_fecha = repository.get_last_date(loteria)
+        logger.info(f"sincronizar_con_neon({loteria}): última fecha en Neon = {ultima_fecha}")
+
+        # 2. ¿Ya está actualizado?
+        if ultima_fecha is not None and ultima_fecha >= ayer:
+            logger.info(f"  {loteria}: ya actualizado hasta {ultima_fecha}. Nada que hacer.")
+            return 0
+
+        # 3. Obtener todos los datos disponibles en la página
+        todos = self.obtener_todos_resultados_pagina(loteria)
+
+        # Filtrar rango que falta
+        if ultima_fecha is not None:
+            desde = ultima_fecha + timedelta(days=1)
+        else:
+            # Si no hay ningún dato en Neon, traer todo
+            desde = None
+
+        nuevos = []
+        for r in todos:
+            try:
+                fecha_r = datetime.strptime(r["fecha"], "%Y-%m-%d").date()
+                if desde is None or fecha_r >= desde:
+                    nuevos.append({
+                        "fecha":   fecha_r,
+                        "loteria": r["lottery"],
+                        "result":  int(r["result"]),
+                        "series":  r["series"],
+                    })
+            except (ValueError, KeyError):
+                continue
+
+        if not nuevos:
+            logger.info(f"  {loteria}: no hay registros nuevos para sincronizar.")
+            return 0
+
+        logger.info(f"  {loteria}: sincronizando {len(nuevos)} registros en Neon...")
+
+        # 4. Upsert en Neon
+        n = repository.upsert_results(nuevos)
+        logger.info(f"  {loteria}: {n} registros upserted en Neon.")
+        return n
+
     def guardar_resultados(self, df_nuevos: pd.DataFrame, excel_path: str):
         """
         Guarda los resultados nuevos en el archivo Excel.

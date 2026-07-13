@@ -117,6 +117,12 @@ class Settings:
     # API CONFIG
     # ======================================================
 
+    # ======================================================
+    # DATABASE CONFIG
+    # ======================================================
+
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
     API_URL: str = os.getenv("BASE_URL", "https://superastro.com.co/historico.php")
     CLAVES_UNICAS: list[str] = ["fecha", "lottery", "result", "series"]
     SCRAPER_DELAY_DEFAULT: float = 1.0
@@ -149,53 +155,7 @@ class Settings:
     # API CONFIG
     # ======================================================
 
-    API_URL: str = os.getenv("BASE_URL", "https://superastro.com.co/historico.php")
-    CLAVES_UNICAS: list[str] = ["fecha", "lottery", "result", "series"]
-    SCRAPER_DELAY_DEFAULT: float = 1.0
-    SCRAPER_REQUEST_TIMEOUT: int = 10
-    zodiaco: dict[str,str] = {
-        'ARIES': 'ARI',
-        'TAURO': 'TAU',
-        'GEMINIS': 'GEM',
-        'GÉMINIS': 'GEM',
-        'CANCER': 'CAN',
-        'CÁNCER': 'CAN',
-        'LEO': 'LEO',
-        'VIRGO': 'VIR',
-        'LIBRA': 'LIB',
-        'ESCORPIO': 'ESC',
-        'ESCORPION': 'ESC',
-        'SAGITARIO': 'SAG',
-        'CAPRICORNIO': 'CAP',
-        'ACUARIO': 'ACU',
-        'PISCIS': 'PIS'
-    }
-    
-    # ======================================================
-    # LOTTERY CONFIG
-    # ======================================================
-
     FIND_LOTERY: str = os.getenv("FIND_LOTERY", "ASTRO")
-
-    # ======================================================
-    # ADVANCED ML CONFIG
-    # ======================================================
-
-    USE_ADVANCED_ML: bool = os.getenv(
-        "USE_ADVANCED_ML",
-        "false"
-    ).lower() == "true"
-
-    ML_ALGORITHM: str = os.getenv(
-        "ML_ALGORITHM",
-        "RandomForest"
-    )
-
-    HYPERPARAMETER_SEARCH: str = os.getenv(
-        "HYPERPARAMETER_SEARCH",
-        "random"
-    )
-
 
     # ======================================================
     # ADVANCED ML CONFIG
@@ -224,18 +184,6 @@ class Settings:
         "true"
     ).lower() == "true"
 
-
-    # ======================================================
-    # LOGGING
-    # ======================================================
-
-
-    ENABLE_FEATURE_ENGINEERING: bool = os.getenv(
-        "ENABLE_FEATURE_ENGINEERING",
-        "true"
-    ).lower() == "true"
-
-
     # ======================================================
     # LOGGING
     # ======================================================
@@ -247,19 +195,8 @@ class Settings:
     # FILE CONFIG
     # ======================================================
 
-
-
-    # ======================================================
-    # FILE CONFIG
-    # ======================================================
-
     EXCEL_FILENAME: str = f"resultados_{FIND_LOTERY.lower()}.xlsx"
     RESULTS_JSON: str = "results.json"
-
-    # ======================================================
-    # PATH HELPERS
-    # ======================================================
-
 
     # ======================================================
     # PATH HELPERS
@@ -295,9 +232,7 @@ class Settings:
 
 
 # Instancia global
-# Instancia global
 settings = Settings()
 
-# Crear directorios automáticamente
 # Crear directorios automáticamente
 settings.ensure_directories()

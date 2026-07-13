@@ -14,12 +14,7 @@ from src.core.logger import get_main_logger
 from src.api.superastro_scraper import SuperAstroScraper
 from src.utils.drop_cache import main as drop_cache_main
 from src.utils.prediction import main as prediction_main
-<<<<<<< HEAD
-from src.utils.training import entrenar_modelos_por_loteria as _entrenar_genetico
 from src.utils.training_simple import entrenar_modelos_por_loteria
-=======
-from src.utils.training import entrenar_modelos_por_loteria
->>>>>>> origin/dev
 from src.features.feature_engineering import generar_features
 
 logger = get_main_logger()
@@ -47,47 +42,34 @@ def ejecutar_limpieza() -> bool:
 
 def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
     """
-    1. Actualizar datos desde SuperAstro.
-    
+    1. Sincroniza datos desde SuperAstro hacia Neon PostgreSQL.
+
     Args:
         filtro_loteria: Filtro para loterías (ej: "astro", "luna", "sol")
     """
     try:
-        logger.info("="*70)
-        logger.info("1. ACTUALIZACIÓN DE DATOS DESDE SUPERASTRO")
-        logger.info("="*70)
-        
-        excel_path = settings.get_excel_path()
-        
+        logger.info("=" * 70)
+        logger.info("1. SINCRONIZACIÓN DE DATOS CON NEON POSTGRESQL")
+        logger.info("=" * 70)
+
         print(f"\n{'='*70}")
-        print("1. ACTUALIZACIÓN DE DATOS")
+        print("1. SINCRONIZACIÓN DE DATOS CON NEON POSTGRESQL")
         print('='*70)
         print(f"Fuente: SuperAstro (sitio oficial)")
-        print(f"Archivo: {excel_path}")
+        print(f"Destino: Neon PostgreSQL")
         if filtro_loteria:
             print(f"Filtro: {filtro_loteria}")
         print('='*70)
-        
-        # Crear scraper
-        scraper = SuperAstroScraper(delay_entre_requests = 1.0)
-        
-        # Actualizar loterías
-        df_nuevos = scraper.actualizar_todas_loterias(
-            str(excel_path),
-            filtro=filtro_loteria
-        )
-        
-        # Guardar resultados
-        if not df_nuevos.empty:
-            scraper.guardar_resultados(df_nuevos, str(excel_path))
-            print(f"\n✅ Actualización completada: {len(df_nuevos)} resultados nuevos")
-        else:
-            print("\n✅ No hay resultados nuevos. Los datos están actualizados.")
-        
+
+        from src.database.sync import synchronize_database
+
+        total = synchronize_database(filtro_loteria=filtro_loteria)
+
+        print(f"\n✅ Sincronización completada: {total} registros insertados/actualizados en Neon")
         return True
-        
+
     except Exception as e:
-        logger.error(f"Error en actualización: {e}")
+        logger.error(f"Error en sincronización: {e}")
         print(f"\n❌ Error: {e}")
         return False
 
@@ -107,21 +89,59 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
         print(f"\n{'='*70}")
         print("2. ENTRENAMIENTO DE MODELOS CON FEATURES AVANZADAS + Genetica IA")
         print('='*70)
+
+        # ── Sincronizar con Neon antes de entrenar ──────────────────
+        try:
+            from src.database.sync import synchronize_database
+            logger.info("Sincronizando con Neon antes del entrenamiento...")
+            synchronize_database(filtro_loteria=loteria)
+        except Exception as e_sync:
+            logger.warning(f"Sincronización con Neon falló (se usará Excel): {e_sync}")
+
+        # ── Intentar cargar desde Neon ──────────────────────────────
+        df = None
+        try:
+            from src.database.connection import NeonConnection
+            from src.database.repository import LotteriaRepository
+
+            conn = NeonConnection()
+            repository = LotteriaRepository(conn)
+
+            # Si hay filtro de lotería cargamos esa, si no cargamos todas
+            # Para obtener todas las loterías cargamos una a una
+            loterias_neon = ["ASTRO SOL", "ASTRO LUNA"]
+            if loteria:
+                loterias_neon = [l for l in loterias_neon if loteria.upper() in l.upper()]
+
+            frames = []
+            for lot in loterias_neon:
+                try:
+                    df_lot = repository.get_all_results(lot)
+                    if not df_lot.empty:
+                        frames.append(df_lot)
+                except Exception as e_lot:
+                    logger.warning(f"No se pudo cargar {lot} desde Neon: {e_lot}")
+
+            if frames:
+                df = pd.concat(frames, ignore_index=True)
+                logger.info(f"Datos cargados desde Neon: {len(df)} registros")
+                print(f"Leyendo datos desde: Neon PostgreSQL ({len(df)} registros)")
+            conn.close()
+        except Exception as e_neon:
+            logger.warning(f"Fallo al cargar datos desde Neon, usando Excel: {e_neon}")
+            df = None
+
+        # ── Fallback a Excel ────────────────────────────────────────
+        if df is None or df.empty:
+            ruta_excel = settings.get_excel_path()
+            if not os.path.exists(ruta_excel):
+                print(f"❌ Archivo no encontrado: {ruta_excel}")
+                print("   Ejecuta primero: python main.py --actualizar")
+                return False
+            print(f"Leyendo datos desde: {ruta_excel} (fallback Excel)")
+            df = pd.read_excel(ruta_excel)
         
-        # Ruta al archivo Excel
-        ruta_excel = settings.get_excel_path()
-        
-        if not os.path.exists(ruta_excel):
-            print(f"❌ Archivo no encontrado: {ruta_excel}")
-            print("   Ejecuta primero: python main.py --actualizar")
-            return False
-        
-        print(f"Leyendo datos desde: {ruta_excel}")
-        
-        # Leer datos
-        df = pd.read_excel(ruta_excel)
-        
-        # Validar columnas
+        # ── Validar columnas ────────────────────────────────────────
         columnas_necesarias = {"fecha", "lottery", "result", "series"}
         if not columnas_necesarias.issubset(df.columns):
             print(f"❌ Faltan columnas necesarias: {columnas_necesarias - set(df.columns)}")
@@ -352,12 +372,12 @@ def mostrar_configuracion() -> None:
     print("="*50)
     print(f"API URL:        {settings.API_URL}")
     print(f"Lotería:        {settings.FIND_LOTERY}")
-    print(f"Iteraciones:    {settings.ITERATIONS}")
-    print(f"Min Accuracy:   {settings.MIN_ACCURACY}")
-    print(f"Archivo Excel:  {settings.EXCEL_FILENAME}")
+    print(f"Iteraciones:    {settings.TRAINING_CONFIGURE['max_iterations']}")
+    print(f"Min Accuracy:   {settings.TRAINING_CONFIGURE['min_accuracy']}")
     print(f"Dir Modelos:    {settings.MODELS_DIR}")
     print(f"Dir Datos:      {settings.DATA_DIR}")
     print(f"Dir Logs:       {settings.LOGS_DIR}")
+    print(f"Database URL:   {'configurado' if settings.DATABASE_URL else 'NO configurado'}")
     print("="*50)
 
 
