@@ -14,7 +14,8 @@ from src.core.logger import get_main_logger
 from src.api.superastro_scraper import SuperAstroScraper
 from src.utils.drop_cache import main as drop_cache_main
 from src.utils.prediction import main as prediction_main
-from src.utils.training import entrenar_modelos_por_loteria
+from src.utils.training import entrenar_modelos_por_loteria as _entrenar_genetico
+from src.utils.training_simple import entrenar_modelos_por_loteria
 from src.features.feature_engineering import generar_features
 
 logger = get_main_logger()

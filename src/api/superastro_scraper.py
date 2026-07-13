@@ -58,92 +58,86 @@ class SuperAstroScraper:
         signo_upper = signo.upper().strip()
         return self.SIGNOS_MAP.get(signo_upper, signo_upper)
     
+    def _parsear_tabla(self, soup: BeautifulSoup, loteria: str) -> List[Dict]:
+        """
+        Extrae todos los resultados disponibles de la tabla HTML en una sola llamada.
+
+        Returns:
+            Lista de dicts con todos los resultados encontrados en la página.
+        """
+        tablas = soup.find_all('table')
+        if len(tablas) < 2:
+            logger.error("No se encontraron suficientes tablas en la página")
+            return []
+
+        tabla_index = 1 if "LUNA" in loteria.upper() else 0
+        tabla = tablas[tabla_index]
+        filas = tabla.find_all('tr')
+
+        resultados = []
+        for fila in filas[1:]:
+            celdas = fila.find_all('td')
+            if len(celdas) < 3:
+                continue
+
+            fecha_celda = celdas[0].text.strip()
+            numero      = celdas[1].text.strip()
+            signo       = celdas[2].text.strip()
+
+            # Parsear fecha (varios formatos posibles)
+            fecha_obj = None
+            for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y'):
+                try:
+                    fecha_obj = datetime.strptime(fecha_celda, fmt)
+                    break
+                except ValueError:
+                    continue
+            if fecha_obj is None:
+                continue
+
+            numero_limpio = re.sub(r'\D', '', numero)
+            if not numero_limpio or len(numero_limpio) != 4:
+                continue
+
+            resultados.append({
+                'fecha':   fecha_obj.strftime('%Y-%m-%d'),
+                'lottery': loteria,
+                'result':  int(numero_limpio),
+                'series':  self.normalizar_signo(signo)
+            })
+
+        return resultados
+
+    def obtener_todos_resultados_pagina(self, loteria: str) -> List[Dict]:
+        """
+        Obtiene TODOS los resultados disponibles en la página en un solo request.
+        Mucho más eficiente que consultar fecha por fecha.
+        """
+        try:
+            logger.info(f"Obteniendo todos los resultados de {loteria} (1 request)...")
+            response = self.session.get(self.BASE_URL, timeout=settings.SCRAPER_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            resultados = self._parsear_tabla(soup, loteria)
+            logger.info(f"  ✓ {len(resultados)} resultados encontrados en la página")
+            return resultados
+        except Exception as e:
+            logger.error(f"Error obteniendo resultados: {e}")
+            return []
+
     def obtener_resultados_fecha(
         self,
         fecha: datetime,
         loteria: str = "ASTRO LUNA"
     ) -> Optional[Dict]:
-        """
-        Obtiene el resultado de una fecha específica.
-        
-        Args:
-            fecha: Fecha del resultado
-            loteria: "ASTRO SOL" o "ASTRO LUNA"
-        
-        Returns:
-            Diccionario con el resultado o None
-        """
-        try:
-            # La página muestra los últimos resultados por defecto
-            # Necesitamos hacer scraping de la tabla
-            
-            logger.info(f"Obteniendo {loteria} para {fecha.strftime('%Y-%m-%d')}")
-            
-            response = self.session.get(self.BASE_URL, timeout=settings.SCRAPER_REQUEST_TIMEOUT)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Buscar la tabla correcta según la lotería
-            # La página tiene 2 tablas: una para astro sol y otra para astro luna
-            tablas = soup.find_all('table')
-            
-            if len(tablas) < 2:
-                logger.error(f"No se encontraron suficientes tablas en la página")
-                return None
-            
-            # Determinar qué tabla usar
-            # Tabla 0 = ASTRO SOL, Tabla 1 = ASTRO LUNA (generalmente)
-            tabla_index = 1 if "LUNA" in loteria.upper() else 0
-            tabla = tablas[tabla_index]
-            
-            # Extraer filas de la tabla
-            filas = tabla.find_all('tr')
-            
-            fecha_buscar = fecha.strftime('%Y-%m-%d')
-            
-            for fila in filas[1:]:  # Saltar header
-                celdas = fila.find_all('td')
-                
-                if len(celdas) >= 4:
-                    fecha_celda = celdas[0].text.strip()
-                    numero = celdas[1].text.strip()
-                    signo = celdas[2].text.strip()
-                    sorteo = celdas[3].text.strip() if len(celdas) > 3 else ""
-                    
-                    # Convertir fecha de formato dd-mm-yyyy a yyyy-mm-dd
-                    try:
-                        fecha_obj = datetime.strptime(fecha_celda, '%Y-%m-%d')
-                        fecha_str = fecha_obj.strftime('%Y-%m-%d')
-                    except:
-                        # Intentar otros formatos
-                        try:
-                            fecha_obj = datetime.strptime(fecha_celda, '%d-%m-%Y')
-                            fecha_str = fecha_obj.strftime('%Y-%m-%d')
-                        except:
-                            continue
-                    
-                    if fecha_str == fecha_buscar:
-                        # Limpiar número (remover caracteres no numéricos)
-                        numero_limpio = re.sub(r'\D', '', numero)
-                        
-                        if numero_limpio and len(numero_limpio) == 4:
-                            resultado = {
-                                'fecha': fecha_str,
-                                'lottery': loteria,
-                                'result': int(numero_limpio),
-                                'series': self.normalizar_signo(signo)
-                            }
-                            
-                            logger.info(f"  ✓ Encontrado: {numero_limpio} - {signo}")
-                            return resultado
-            
-            logger.warning(f"  ✗ No se encontró resultado para {fecha_buscar}")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error obteniendo resultado: {e}")
-            return None
+        """Obtiene el resultado de una fecha específica (usa caché de página)."""
+        todos = self.obtener_todos_resultados_pagina(loteria)
+        fecha_buscar = fecha.strftime('%Y-%m-%d')
+        for r in todos:
+            if r['fecha'] == fecha_buscar:
+                return r
+        logger.warning(f"  ✗ No se encontró resultado para {fecha_buscar}")
+        return None
     
     def obtener_ultima_fecha(self, excel_path: str, loteria: str) -> datetime:
         """
@@ -188,49 +182,37 @@ class SuperAstroScraper:
     ) -> List[Dict]:
         """
         Actualiza los resultados de una lotería desde la última fecha hasta ayer.
-        
-        Args:
-            loteria: "ASTRO SOL" o "ASTRO LUNA"
-            excel_path: Ruta al archivo Excel
-            hasta_fecha: Fecha límite (por defecto: ayer)
-        
-        Returns:
-            Lista de resultados nuevos obtenidos
+        Obtiene todos los datos en UN solo request y filtra por rango de fechas.
         """
-        # Obtener última fecha
-        desde_fecha = self.obtener_ultima_fecha(excel_path, loteria)
-        
-        # Fecha límite: ayer
+        desde_fecha = self.obtener_ultima_fecha(excel_path, loteria) + timedelta(days=1)
+
         if hasta_fecha is None:
             hasta_fecha = datetime.now() - timedelta(days=1)
-        
-        # Ajustar desde_fecha para no duplicar
-        desde_fecha = desde_fecha + timedelta(days=1)
-        
+
         logger.info(f"\n{'='*70}")
         logger.info(f"ACTUALIZANDO: {loteria}")
         logger.info(f"Desde: {desde_fecha.strftime('%Y-%m-%d')}")
         logger.info(f"Hasta: {hasta_fecha.strftime('%Y-%m-%d')}")
         logger.info('='*70)
-        
-        # Obtener resultados día por día
+
+        if desde_fecha > hasta_fecha:
+            logger.info("Los datos ya están actualizados.")
+            return []
+
+        # Un solo request para todos los datos disponibles
+        todos = self.obtener_todos_resultados_pagina(loteria)
+
+        # Filtrar solo el rango que necesitamos
         resultados_nuevos = []
-        fecha_actual = desde_fecha
-        
-        while fecha_actual <= hasta_fecha:
-            resultado = self.obtener_resultados_fecha(fecha_actual, loteria)
-            
-            if resultado:
-                resultados_nuevos.append(resultado)
-            
-            fecha_actual += timedelta(days=1)
-            
-            # Pausa entre requests
-            if fecha_actual <= hasta_fecha:
-                time.sleep(self.delay)
-        
-        logger.info(f"\n✓ Obtenidos {len(resultados_nuevos)} resultados nuevos para {loteria}")
-        
+        for r in todos:
+            try:
+                fecha_r = datetime.strptime(r['fecha'], '%Y-%m-%d')
+                if desde_fecha <= fecha_r <= hasta_fecha:
+                    resultados_nuevos.append(r)
+            except ValueError:
+                continue
+
+        logger.info(f"✓ {len(resultados_nuevos)} resultados nuevos para {loteria}")
         return resultados_nuevos
     
     def actualizar_todas_loterias(

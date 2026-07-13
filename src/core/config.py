@@ -20,8 +20,8 @@ class Settings:
 
     TRAINING_CONFIGURE = {
         "min_accuracy": 0.05,         # reemplaza TRAINING_MIN_ACCURACY
-        "iterations": 2,             # reemplaza ITERATIONS
-        "max_iterations": 10,         # reemplaza TRAINING_MAX_ITER
+        "iterations": 2,              # reemplaza ITERATIONS
+        "max_iterations": 5,         # reemplaza TRAINING_MAX_ITER
         "max_training_logs": 3,       # reemplaza MAX_TRAINING_LOGS
         "min_records": 50,            # reemplaza min_records del antiguo TRAINING_CONFIG
         "training_verbose": True,     # reemplaza TRAINING_VERBOSE
@@ -39,9 +39,9 @@ class Settings:
     # EVOLUTIONARY TRAINING CONFIG
     # ======================================================
 
-    EVOLUTION_GENERATIONS = 150
-    EVOLUTION_POPULATION_SIZE = 120
-    EVOLUTION_ELITE_SIZE = 10
+    EVOLUTION_GENERATIONS = 10
+    EVOLUTION_POPULATION_SIZE = 8
+    EVOLUTION_ELITE_SIZE = 3
 
     EVOLUTIONARY_MAX_ITERATIONS = 10000
     EVOLUTIONARY_PATIENCE = 100
@@ -51,13 +51,13 @@ class Settings:
     # RANDOM FOREST SEARCH SPACE
     # ======================================================
 
-    RF_N_ESTIMATORS_RANGE = (50, 400)
-    RF_MAX_DEPTH_OPTIONS = [3, 4, 5, 6, 8, 10, None]
-    RF_MIN_SAMPLES_SPLIT_RANGE = (2, 10)
+    RF_N_ESTIMATORS_RANGE = (20, 100)
+    RF_MAX_DEPTH_OPTIONS = [3, 4, 5, 6, None]
+    RF_MIN_SAMPLES_SPLIT_RANGE = (2, 8)
 
     MUTATION_PROBABILITY = 0.4
     MUTATION_ESTIMATOR_STEP = 50
-    N_JOBS = -1 
+    N_JOBS = 1   # 1 = sin paralelismo (evita MemoryError en equipos con poca RAM)
 
     mutations = {
         "n_estimators": [100, 150, 200, 250, 300],
