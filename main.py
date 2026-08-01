@@ -176,7 +176,7 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = 
             loterias = df["lottery"].unique()
         
         print(f"\nLoterías a entrenar: {list(loterias)}")
-        print(f"Features: Avanzadas (temporales + lag + rolling + tendencias)")
+        print(f"Features: Históricas (lags + rolling + frecuencia + días sin aparecer)")
         print('='*70)
         
         # Entrenar cada lotería
@@ -187,49 +187,31 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = 
             
             df_loteria = df[df["lottery"].str.lower() == nombre_loteria.lower()].copy()
             
-            if len(df_loteria) < 50:
+            min_rec = settings.TRAINING_CONFIGURE["min_records"]
+            if len(df_loteria) < min_rec:
                 print(f"❌ Datos insuficientes para {nombre_loteria}: {len(df_loteria)} registros")
-                print("   Se necesitan al menos 50 registros")
+                print(f"   Se necesitan al menos {min_rec} registros")
                 continue
             
             # Ordenar por fecha
             df_loteria = df_loteria.sort_values("fecha").reset_index(drop=True)
-            
-            # ============================================================
-            # FEATURES AVANZADAS PARA MAYOR PRECISIÓN
-            # ============================================================
-            X_df = generar_features(df_loteria)
+            df_loteria["fecha"] = pd.to_datetime(df_loteria["fecha"])
 
-            # limpiar posibles NaN generados por lag/rolling
+            # Generar features históricas (sin calendario)
+            X_df = generar_features(df_loteria)
             X_df = X_df.replace([np.inf, -np.inf], np.nan).dropna()
 
-            # alinear dataframe con features
-            df_loteria = df_loteria.tail(len(X_df))
-
-            # 5. Features de tendencia
-            df_loteria["tendencia_7"] = (
-                df_loteria["result"].rolling(window=7, min_periods=1).apply(
-                    lambda x: 1 if len(x) > 1 and x.iloc[-1] > x.iloc[0] else 0
-                )
-            )
-            
-            # 6. Features de frecuencia
-            df_loteria["result_freq_mean"] = df_loteria["result"].rolling(window=30, min_periods=1).mean()
-            df_loteria["result_freq_std"] = df_loteria["result"].rolling(window=30, min_periods=1).std()
-                        
-            # alinear dataframe con features generadas
+            # Alinear target con las filas que sobrevivieron al dropna
             df_loteria = df_loteria.tail(len(X_df))
             X_l = X_df.values
             y_r = df_loteria["result"].values
             y_s = df_loteria["series"].values
             cols = list(X_df.columns)
-            
-            print(f"\nDatos preparados:")
-            print(f"  Registros: {X_l.shape[0]}")
-            print(f"  Features: {X_l.shape[1]}")
 
-            cols = list(X_df.columns)
-            print(f"  Features usadas: {', '.join(cols[:5])}... (+{len(cols)-5} más)")
+            print(f"\nDatos preparados:")
+            print(f"  Registros : {X_l.shape[0]}")
+            print(f"  Features  : {X_l.shape[1]}")
+            print(f"  Features  : {', '.join(cols[:5])}... (+{len(cols)-5} más)")
             
             entrenar_modelos_por_loteria(
                 X=X_l,

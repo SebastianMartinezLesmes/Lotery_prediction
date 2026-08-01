@@ -137,10 +137,6 @@ def preparar_datos(df, loteria):
     df = df.sort_values("fecha")
     # Garantizar que fecha sea datetime (viene como date desde Neon)
     df["fecha"] = pd.to_datetime(df["fecha"])
-    df["dia"]       = df["fecha"].dt.day
-    df["mes"]       = df["fecha"].dt.month
-    df["anio"]      = df["fecha"].dt.year
-    df["dia_semana"]= df["fecha"].dt.weekday
     return df
 
 
