@@ -2,24 +2,74 @@ name: Sincronizar Neon
 
 on:
   schedule:
-    - cron: '0 6 * * 1,3,5'   # lunes, miércoles y viernes a las 6am UTC
-  workflow_dispatch:            # también manual
+    # Cada 3 días a las 6:00 UTC (días 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31)
+    - cron: '0 6 */3 * *'
+  workflow_dispatch:        # Ejecución manual desde la UI de GitHub
+    inputs:
+      filtro_loteria:
+        description: 'Filtro de lotería (opcional, ej: luna, sol)'
+        required: false
+        default: ''
 
 jobs:
   sync:
+    name: Actualizar base de datos Neon
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Cache de dependencias pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
       - name: Sincronizar Neon
+        id: sync
         env:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-        run: python -c "from src.database.sync import synchronize_database; synchronize_database()"
+        run: |
+          FILTRO="${{ github.event.inputs.filtro_loteria }}"
+          if [ -n "$FILTRO" ]; then
+            echo "Sincronizando con filtro: $FILTRO"
+            python -c "
+          from src.database.sync import synchronize_database
+          total = synchronize_database(filtro_loteria='$FILTRO')
+          print(f'TOTAL_REGISTROS={total}')
+          " | tee /tmp/sync_output.txt
+          else
+            echo "Sincronizando todas las loterías"
+            python -c "
+          from src.database.sync import synchronize_database
+          total = synchronize_database()
+          print(f'TOTAL_REGISTROS={total}')
+          " | tee /tmp/sync_output.txt
+          fi
+
+          # Extraer total para el resumen
+          TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | cut -d= -f2 || echo "0")
+          echo "total_registros=${TOTAL}" >> $GITHUB_OUTPUT
+
+      - name: Resumen de ejecución
+        if: always()
+        run: |
+          echo "## 🎯 Sincronización Neon — $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Registros sincronizados | ${{ steps.sync.outputs.total_registros || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Filtro aplicado | ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
