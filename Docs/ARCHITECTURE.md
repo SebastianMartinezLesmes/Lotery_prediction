@@ -1,311 +1,245 @@
-# 🏗️ Arquitectura del Sistema - Mejoras Implementadas
+# Arquitectura del Sistema
 
-## 📋 Resumen de Mejoras
-
-Este documento describe las mejoras arquitectónicas implementadas en el sistema de predicción de lotería.
+Sistema de predicción de lotería colombiana (Astro Sol / Astro Luna) basado en
+Machine Learning con RandomForest, scraping incremental y sincronización automática
+contra Neon PostgreSQL.
 
 ---
 
-## 1️⃣ Separación de Configuración por Entorno
+## Estructura de directorios
 
-### Archivos Creados:
-- `.env.example` - Plantilla de configuración
-- `src/core/config.py` - Gestión centralizada de configuración
+```
+Lotery_prediction/
+│
+├── main.py                      # CLI principal (--actualizar, --entrenar, --predecir)
+├── requirements.txt
+├── .env                         # Variables de entorno locales (no se sube a git)
+├── .env.example                 # Plantilla de configuración
+│
+├── src/
+│   ├── core/
+│   │   ├── config.py            # Configuración centralizada + perfiles de entrenamiento
+│   │   ├── logger.py            # Logger solo-consola (sin archivos .log)
+│   │   ├── exceptions.py        # Jerarquía de excepciones personalizadas
+│   │   └── validators.py        # Validadores de datos
+│   │
+│   ├── api/
+│   │   └── superastro_scraper.py  # Scraper de superastro.com.co
+│   │
+│   ├── database/
+│   │   ├── connection.py        # Conexión a Neon PostgreSQL (psycopg2)
+│   │   ├── repository.py        # Acceso a datos — único lugar con SQL
+│   │   ├── queries.py           # Queries SQL parametrizadas
+│   │   └── sync.py              # Orquestador de sincronización
+│   │
+│   ├── features/
+│   │   └── feature_engineering.py  # Generación de features históricas (41 features)
+│   │
+│   ├── models/
+│   │   └── schemas.py           # Schemas Pydantic
+│   │
+│   ├── utils/
+│   │   ├── training_simple.py   # Entrenamiento por dígitos con paralelismo
+│   │   ├── prediction.py        # Motor de predicción con top-3
+│   │   ├── save_training.py     # Guardado de modelos con metadata
+│   │   ├── alerts.py            # Sistema de alertas (consola + email opcional)
+│   │   ├── mutation.py          # Entrenamiento evolutivo (genético)
+│   │   ├── batch_prediction.py  # Predicción por lotes
+│   │   ├── training.py          # Entrenamiento completo (RF evolutivo)
+│   │   ├── training_visualizer.py  # Visualización del progreso
+│   │   └── drop_cache.py        # Limpieza de __pycache__
+│   │
+│   └── excel/
+│       ├── excel_updater.py     # Actualización del Excel local
+│       └── read_excel.py        # Lectura del Excel
+│
+├── data/
+│   ├── resultados_astro.xlsx    # Histórico local (fallback cuando Neon no está disponible)
+│   └── results.json             # Predicciones generadas
+│
+├── IA_models/
+│   ├── 1_astro_luna_result.pkl  # Slot 1 — modelo result ASTRO LUNA
+│   ├── 2_astro_luna_result.pkl  # Slot 2 — modelo result ASTRO LUNA
+│   ├── 1_astro_luna_series.pkl  # Slot 1 — modelo series ASTRO LUNA
+│   └── 2_astro_luna_series.pkl  # Slot 2 — modelo series ASTRO LUNA
+│
+├── scripts/
+│   ├── migrar_a_neon.py         # Migración inicial Excel → Neon
+│   ├── scheduler.py             # Scheduler local (opcional)
+│   └── setup_entorno.py         # Setup del entorno
+│
+├── .github/
+│   └── workflows/
+│       └── sync_neon.yml        # GitHub Actions: Auto_Neon_Sync (cada 3 días)
+│
+└── Docs/
+    ├── ARCHITECTURE.md          # Este documento
+    ├── MEJORAS_IA.md            # Estado del sistema de IA y mejoras
+    ├── MEJORAS_ML.md            # Estado del ML y decisiones técnicas
+    ├── FEATURES.md              # Features de entrenamiento y su justificación
+    └── SCHEDULER.md             # Automatización con GitHub Actions
+```
 
-### Características:
-- ✅ Variables de entorno con `python-dotenv`
-- ✅ Configuración centralizada en clase `Settings`
-- ✅ Valores por defecto seguros
-- ✅ Métodos helper para rutas de archivos
-- ✅ Creación automática de directorios
+---
 
-### Uso:
+## Flujo de datos
+
+```
+superastro.com.co
+      │
+      ▼
+SuperAstroScraper          ← 1 request por ejecución, parsea tabla HTML
+      │
+      ▼
+sincronizar_con_neon()     ← obtiene MAX(fecha) de Neon, filtra solo lo nuevo
+      │
+      ▼
+LotteriaRepository         ← upsert_results() — INSERT ON CONFLICT DO UPDATE
+      │
+      ▼
+Neon PostgreSQL            ← fuente principal de datos
+      │
+      ▼ (fallback: Excel local si Neon no está disponible)
+      │
+      ▼
+feature_engineering.py     ← genera 41 features históricas
+      │
+      ▼
+training_simple.py         ← entrena 5 RF (4 dígitos + series) en paralelo
+      │
+      ▼
+IA_models/*.pkl            ← 2 slots por tipo de modelo, guarda si mejora
+      │
+      ▼
+prediction.py              ← carga mejor modelo, predice top-3 números + signos
+      │
+      ▼
+data/results.json          ← resultado guardado con timestamp y confianza
+```
+
+---
+
+## Configuración centralizada
+
+Toda la configuración vive en `src/core/config.py` como atributos de la clase `Settings`.
+Se instancia una vez como `settings` y se importa desde cualquier módulo.
+
 ```python
 from src.core.config import settings
 
-# Acceder a configuración
-print(settings.API_URL)
-print(settings.ITERATIONS)
-
-# Obtener rutas
-excel_path = settings.get_excel_path()
-model_path = settings.get_model_path("astro_sol", "result")
+settings.API_URL          # URL del scraper
+settings.DATABASE_URL     # Cadena de conexión Neon (desde .env)
+settings.MODELS_DIR       # Ruta a IA_models/
+settings.TRAINING_MODE    # 'test' o 'prod'
+settings.get_training_profile()  # Devuelve el perfil activo
 ```
 
-### Configurar:
-1. Copiar `.env.example` a `.env`
-2. Ajustar valores según el entorno
-3. El sistema carga automáticamente las variables
+Variables de entorno relevantes (definidas en `.env`):
+
+| Variable | Descripción | Default |
+|---|---|---|
+| `DATABASE_URL` | Cadena de conexión Neon PostgreSQL | — |
+| `TRAINING_MODE` | Modo de entrenamiento: `test` o `prod` | `prod` |
+| `MODELS_DIR` | Carpeta de modelos | `IA_models` |
+| `DATA_DIR` | Carpeta de datos | `data` |
+| `LOG_LEVEL` | Nivel de logging | `INFO` |
 
 ---
 
-## 2️⃣ Organización de Archivos por Carpetas
+## CLI — Comandos disponibles
 
-### Nueva Estructura:
-
-```
-src/
-├── core/                    # Núcleo del sistema
-│   ├── __init__.py
-│   ├── config.py           # Configuración centralizada
-│   ├── exceptions.py       # Excepciones personalizadas
-│   ├── logger.py           # Sistema de logging mejorado
-│   └── validators.py       # Validadores de datos
-│
-├── models/                  # Esquemas y validación (Pydantic)
-│   ├── __init__.py
-│   └── schemas.py          # Modelos Pydantic
-│
-├── api/                     # Consumo de APIs
-│   ├── __init__.py
-│   ├── API.py              # (legacy)
-│   └── client.py           # Cliente HTTP mejorado
-│
-├── excel/                   # Manejo de Excel
-│   ├── __init__.py
-│   ├── excel.py
-│   └── read_excel.py
-│
-└── utils/                   # Utilidades
-    ├── __init__.py
-    ├── training.py
-    ├── prediction.py
-    ├── result.py
-    └── zodiaco.py
-
-IA_models/                   # Modelos de ML entrenados (.pkl)
-├── .gitkeep
-├── modelo_result_*.pkl
-└── modelo_series_*.pkl
-```
-
-### Principios:
-- **core/**: Funcionalidad base compartida
-- **models/**: Definición de estructuras de datos (Pydantic schemas)
-- **api/**: Comunicación externa
-- **excel/**: Persistencia de datos
-- **utils/**: Lógica de negocio específica
-- **IA_models/**: Modelos de Machine Learning entrenados (.pkl)
-
----
-
-## 3️⃣ Manejo de Errores Robusto
-
-### Excepciones Personalizadas (`src/core/exceptions.py`):
-
-```python
-LotteryPredictionError      # Base
-├── DataValidationError     # Validación de datos
-├── ModelNotFoundError      # Modelo no encontrado
-├── ModelTrainingError      # Error en entrenamiento
-├── APIError                # Error de API
-├── ExcelError              # Error de Excel
-└── InsufficientDataError   # Datos insuficientes
-```
-
-### Características:
-- ✅ Jerarquía clara de excepciones
-- ✅ Mensajes descriptivos
-- ✅ Fácil captura por tipo
-- ✅ Logging automático de errores
-
-### Uso:
-```python
-from src.core.exceptions import APIError, DataValidationError
-
-try:
-    data = api_client.get_results()
-except APIError as e:
-    logger.error(f"Error de API: {e}")
-    # Manejar error específico
-except DataValidationError as e:
-    logger.error(f"Datos inválidos: {e}")
-    # Manejar validación
-```
-
----
-
-## 4️⃣ Validación de Datos con Pydantic
-
-### Esquemas Creados (`src/models/schemas.py`):
-
-1. **LotteryResult** - Resultado de lotería
-2. **PredictionInput** - Entrada para predicción
-3. **PredictionOutput** - Salida de predicción
-4. **TrainingMetrics** - Métricas de entrenamiento
-5. **APIResponse** - Respuesta de API
-6. **ModelConfig** - Configuración de modelo
-
-### Características:
-- ✅ Validación automática de tipos
-- ✅ Conversión de datos
-- ✅ Validadores personalizados
-- ✅ Mensajes de error claros
-- ✅ Serialización JSON
-
-### Ejemplo:
-```python
-from src.models.schemas import LotteryResult
-
-# Validación automática
-result = LotteryResult(
-    fecha="2024-01-15",
-    lottery="astro sol",
-    result=1234,
-    series="aries"
-)
-
-# Conversión automática
-print(result.lottery)  # "ASTRO SOL" (uppercase)
-print(result.fecha)    # date(2024, 1, 15)
-```
-
-### Validadores (`src/core/validators.py`):
-- `validate_dataframe()` - Valida DataFrames
-- `validate_lottery_results()` - Valida resultados
-- `validate_training_data()` - Valida datos de entrenamiento
-- `validate_model_path()` - Valida rutas de modelos
-
----
-
-## 5️⃣ Type Hints Completos
-
-### Beneficios:
-- ✅ Autocompletado en IDEs
-- ✅ Detección temprana de errores
-- ✅ Documentación implícita
-- ✅ Mejor mantenibilidad
-
-### Ejemplo:
-```python
-from typing import List, Optional, Dict, Any
-from datetime import date
-import pandas as pd
-
-def get_historical_results(
-    fecha_inicio: Optional[date] = None,
-    fecha_fin: Optional[date] = None,
-    lottery_filter: Optional[str] = None,
-    show_progress: bool = True
-) -> List[Dict[str, Any]]:
-    """
-    Obtiene resultados históricos.
-    
-    Args:
-        fecha_inicio: Fecha de inicio
-        fecha_fin: Fecha de fin
-        lottery_filter: Filtro de lotería
-        show_progress: Mostrar progreso
-    
-    Returns:
-        Lista de resultados
-    """
-    pass
-```
-
----
-
-## 🔄 Cliente API Mejorado
-
-### Archivo: `src/api/client.py`
-
-### Características:
-- ✅ Reintentos automáticos con backoff exponencial
-- ✅ Timeout configurable
-- ✅ Manejo de errores específico
-- ✅ Context manager para gestión de recursos
-- ✅ Logging detallado
-- ✅ Filtrado y deduplicación
-- ✅ Barra de progreso
-
-### Uso:
-```python
-from src.api.client import LotteryAPIClient
-from datetime import date
-
-# Context manager (recomendado)
-with LotteryAPIClient() as client:
-    results = client.get_historical_results(
-        fecha_inicio=date(2024, 1, 1),
-        lottery_filter="ASTRO"
-    )
-
-# Uso manual
-client = LotteryAPIClient(timeout=60, max_retries=5)
-try:
-    results = client.get_results_by_date(date.today())
-finally:
-    client.close()
-```
-
----
-
-## 📊 Sistema de Logging Mejorado
-
-### Archivo: `src/core/logger.py`
-
-### Características:
-- ✅ Múltiples loggers especializados
-- ✅ Formato consistente
-- ✅ Salida a consola y archivo
-- ✅ Niveles configurables
-- ✅ Sin duplicación de handlers
-
-### Loggers Disponibles:
-```python
-from src.core.logger import (
-    get_main_logger,
-    get_training_logger,
-    get_api_logger,
-    get_prediction_logger
-)
-
-logger = get_main_logger()
-logger.info("Sistema iniciado")
-logger.error("Error crítico", exc_info=True)
-```
-
----
-
-## 📦 Dependencias
-
-### Archivo: `requirements.txt`
-
-Nuevas dependencias agregadas:
-- `python-dotenv` - Variables de entorno
-- `pydantic` - Validación de datos
-
-Instalar:
 ```bash
-pip install -r requirements.txt
+# Pipeline completo (actualizar → entrenar → predecir → limpiar)
+python main.py
+
+# Pasos individuales
+python main.py --actualizar              # Sincronizar con Neon
+python main.py --entrenar               # Entrenar modelos (modo prod por defecto)
+python main.py --predecir               # Generar predicción
+python main.py --limpiar                # Limpiar __pycache__
+
+# Con filtros
+python main.py --entrenar --lottery luna
+python main.py --predecir --lottery "ASTRO LUNA"
+
+# Modo de entrenamiento (sobreescribe .env)
+python main.py --entrenar --modo test   # Rápido, 2 iteraciones
+python main.py --entrenar --modo prod   # Completo, paralelo con early stop
+
+# Ver configuración activa
+python main.py --config
 ```
 
 ---
 
-## 🚀 Próximos Pasos
+## Base de datos Neon
 
-### Migración Gradual:
-1. ✅ Estructura base creada
-2. ⏳ Refactorizar módulos existentes para usar nueva arquitectura
-3. ⏳ Agregar tests unitarios
-4. ⏳ Implementar mejoras de ML
-5. ⏳ Crear API REST
+Esquema en PostgreSQL:
 
-### Compatibilidad:
-- Los archivos legacy siguen funcionando
-- Migración incremental sin romper funcionalidad
-- Nuevos desarrollos usan la nueva arquitectura
+```sql
+loterias   (id, nombre)
+signos     (id, codigo CHAR(3), nombre)
+resultados (id, fecha DATE, loteria_id, result SMALLINT, signo_id)
+           UNIQUE (fecha, loteria_id)
 
----
+-- Vista de conveniencia
+v_resultados  →  fecha, lottery, result, series
+```
 
-## 📚 Documentación Adicional
-
-- Ver ejemplos de uso en cada módulo
-- Consultar docstrings para detalles de funciones
-- Revisar type hints para entender interfaces
+La constraint `UNIQUE (fecha, loteria_id)` garantiza que nunca haya duplicados
+aunque el workflow se ejecute varias veces en el mismo día.
 
 ---
 
-**Autor**: Sistema de Predicción de Lotería  
-**Fecha**: 2024  
-**Versión**: 2.0
+## GitHub Actions — Auto_Neon_Sync
+
+Workflow en `.github/workflows/sync_neon.yml`:
+
+- Se ejecuta **cada 3 días a las 12:00 UTC** (`0 12 */3 * *`)
+- También ejecutable manualmente desde GitHub UI (`workflow_dispatch`)
+- Requiere el secret `NEON_DATABASE_URL` configurado en el repositorio
+- Hace **sincronización incremental**: solo descarga fechas que faltan en Neon
+- Incluye cache de pip para ejecuciones más rápidas
+- Genera un resumen en la pestaña de Actions con registros sincronizados
+
+---
+
+## Logging
+
+El sistema usa **solo salida a consola** — no se generan archivos `.log`.
+Esto simplifica el proyecto y es compatible con GitHub Actions y Docker,
+que capturan stdout de forma nativa.
+
+```python
+from src.core.logger import LoggerManager
+
+logger = LoggerManager.get_logger("mi_modulo")
+logger.info("Mensaje informativo")
+logger.error("Error ocurrido")
+```
+
+---
+
+## Modelos guardados
+
+Cada modelo se guarda como un payload `dict` serializado con `joblib`:
+
+```python
+{
+    "model":         <objeto sklearn>,
+    "accuracy":      0.2487,
+    "f1_score":      None,
+    "algoritmo":     "_ModeloCompuesto",
+    "n_features":    41,
+    "feature_names": [...],   # FEATURE_COLUMNS exactas con las que se entrenó
+    "n_records":     996,
+    "loteria":       "ASTRO LUNA",
+    "tipo_modelo":   "result",
+    "params":        {...},
+    "timestamp":     "2026-08-01T17:00:00"
+}
+```
+
+Hay 2 slots por modelo. Al entrenar, se reemplaza el slot con menor accuracy
+solo si el nuevo modelo lo supera. Esto garantiza que `IA_models/` siempre
+tenga los 2 mejores modelos encontrados históricamente.

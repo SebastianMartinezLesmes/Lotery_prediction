@@ -1,234 +1,167 @@
-# Mejoras de IA y Algoritmo Genético
+# Estado del Sistema de IA
 
-Estado actual del sistema y propuestas de mejora ordenadas por impacto.
-
----
-
-## Estado Actual
-
-- Algoritmo: RandomForest con búsqueda evolutiva (genética)
-- Features: 20 (temporales, lag, rolling, tendencia, frecuencia)
-- Memoria IA: 2 slots por modelo (result + series) en `IA_models/`
-- Warm start: activo (carga el mejor modelo como baseline genético)
-- Evaluación paralela: activa (`n_jobs=-1`)
+Descripción del estado actual del sistema de inteligencia artificial,
+decisiones tomadas y líneas de mejora futuras.
 
 ---
 
-## Mejoras Propuestas
+## Estado actual
 
-### 1. Features (Mayor impacto inmediato)
-
-El modelo actualmente usa 20 features. Agregar estas puede mejorar el score:
-
-**Frecuencia histórica del número**
-```python
-# Cuántas veces apareció cada número en los últimos N sorteos
-df["freq_result_30"] = df["result"].apply(
-    lambda x: (df["result"].tail(30) == x).sum()
-)
-```
-
-**Distancia al último sorteo del mismo número**
-```python
-# Cuántos días han pasado desde que salió este número
-df["dias_desde_ultimo"] = df.groupby("result")["fecha"].diff().dt.days
-```
-
-**Número de dígitos (unidades, decenas, centenas, miles)**
-```python
-df["digito_unidad"]   = df["result"] % 10
-df["digito_decena"]   = (df["result"] // 10) % 10
-df["digito_centena"]  = (df["result"] // 100) % 10
-df["digito_mil"]      = (df["result"] // 1000) % 10
-```
-
-**Paridad y divisibilidad**
-```python
-df["es_par"] = df["result"] % 2
-df["suma_digitos"] = df["result"].astype(str).apply(lambda x: sum(int(d) for d in x))
-```
-
-**Ciclos lunares / estacionales**
-```python
-import math
-df["ciclo_lunar"] = df["fecha"].apply(lambda d: math.sin(2 * math.pi * d.day / 29.5))
-df["ciclo_anual"] = df["fecha"].apply(lambda d: math.sin(2 * math.pi * d.dayofyear / 365))
-```
+| Componente | Estado |
+|---|---|
+| Algoritmo base | RandomForest (modelo compuesto por dígitos) |
+| Features | 41 históricas (sin calendario) |
+| Entrenamiento | Paralelo con early stopping |
+| Modos | `test` (2 iter, secuencial) / `prod` (60 iter, 4 núcleos) |
+| Memoria IA | 2 slots por modelo — guarda solo si mejora |
+| Predicción | Top-3 números + Top-3 signos con confianza |
+| Accuracy result | ~0.25 (modo prod, ASTRO LUNA) |
+| Accuracy series | ~0.14 (modo prod, ASTRO LUNA) |
 
 ---
 
-### 2. Algoritmo Genético (Mejoras al motor evolutivo)
+## Decisiones de diseño tomadas
 
-**Diversidad genética controlada**
+### Por qué se eliminaron las features de calendario
 
-Actualmente la población puede converger prematuramente. Agregar un índice de diversidad:
+Las features `dia`, `mes`, `anio`, `dia_semana` etc. fueron eliminadas porque
+asumen que la fecha tiene relación causal con el resultado del sorteo. Eso no
+tiene fundamento — cada sorteo es un evento independiente del día en que ocurre.
 
-```python
-def calcular_diversidad(poblacion):
-    n_estimators = [p["n_estimators"] for p in poblacion]
-    return np.std(n_estimators)  # baja diversidad = estancamiento
+Mantenerlas introducía **ruido** en el modelo: el RF desperdiciaba splits en
+variables irrelevantes, diluyendo la señal real que sí existe en el historial
+de números.
 
-# Si diversidad < umbral, inyectar individuos aleatorios
-if calcular_diversidad(poblacion) < 10:
-    poblacion[-3:] = crear_poblacion_inicial(3)
-```
+### Por qué modelo compuesto por dígitos
 
-**Elitismo adaptativo**
+El resultado es un número entre 0 y 9999, lo que genera ~909 clases únicas
+con solo ~1000 registros. Intentar clasificar directamente ese espacio es
+un problema extremadamente difícil (menos de 1.1 registros por clase en promedio).
 
-En vez de siempre guardar los top-K, variar el tamaño del elite según la generación:
+La estrategia de descomponer en 4 dígitos (miles, centenas, decenas, unidades)
+convierte el problema en 4 clasificaciones de **10 clases cada una**, que es
+manejable con los datos disponibles. La predicción final se reconstruye
+combinando las probabilidades de cada dígito.
 
-```python
-elite_size = max(2, int(poblacion_size * (1 - generacion / max_generaciones) * 0.3))
-```
+### Por qué early stopping en modo prod
 
-**Torneo en vez de ranking**
+El espacio de hiperparámetros de RF con las opciones del perfil `prod` tiene
+5 × 5 × 4 = 100 combinaciones posibles. Después de explorar ~40-50, la
+probabilidad de encontrar algo significativamente mejor es baja. El early
+stopping con `patience=20` evita desperdiciar tiempo en terreno ya explorado.
 
-La selección por torneo mantiene más diversidad que seleccionar siempre los mejores:
+### Por qué paralelismo con threads en vez de processes
 
-```python
-def seleccion_torneo(resultados, k=3):
-    torneo = random.sample(resultados, k)
-    return max(torneo, key=lambda x: x["accuracy"])
-```
-
-**Crossover de múltiples puntos**
-
-El crossover actual elige aleatoriamente entre padre1 y padre2. Un crossover de 2 puntos mezcla mejor:
-
-```python
-def crossover_2puntos(padre1, padre2):
-    keys = list(padre1.keys())
-    p1, p2 = sorted(random.sample(range(len(keys)), 2))
-    hijo = {}
-    for i, k in enumerate(keys):
-        hijo[k] = padre1[k] if i < p1 or i >= p2 else padre2[k]
-    return hijo
-```
+`joblib.Parallel(prefer="threads")` evita el overhead de serialización que
+tiene `prefer="processes"`. RandomForest libera el GIL durante el entrenamiento
+(opera en C/Cython), así que los threads sí corren en paralelo real en este caso.
 
 ---
 
-### 3. Modelos Alternativos (Reemplazar o complementar RandomForest)
+## Señal estadística detectada en los datos
 
-**XGBoost** - Generalmente supera a RandomForest en datos tabulares:
-```python
-from xgboost import XGBClassifier
-modelo = XGBClassifier(n_estimators=200, max_depth=4, learning_rate=0.1)
-```
+Análisis sobre ASTRO LUNA (996 registros, oct 2023 – jul 2026):
 
-**LightGBM** - Más rápido que XGBoost, bueno para datasets pequeños:
-```python
-from lightgbm import LGBMClassifier
-modelo = LGBMClassifier(n_estimators=200, num_leaves=31, verbose=-1)
-```
+| Métrica | Valor | Interpretación |
+|---|---|---|
+| Autocorr result lag1 | 0.068 | Señal débil pero presente |
+| Autocorr diff lag1 | **-0.465** | Fuerte reversión a la media |
+| Autocorr dígito unidades lag1 | 0.083 | Leve persistencia por posición |
+| Correlación entre dígitos | ~0 | Dígitos son independientes entre sí |
+| Autocorr suma de dígitos lag1 | 0.055 | Señal débil de nivel general |
 
-**Ensemble de modelos** - Combinar predicciones de varios modelos:
-```python
-from sklearn.ensemble import VotingClassifier
-ensemble = VotingClassifier([
-    ("rf", RandomForestClassifier()),
-    ("xgb", XGBClassifier()),
-    ("lgbm", LGBMClassifier())
-], voting="soft")
-```
-
-Para integrar en el sistema evolutivo, agregar en `config.py`:
-```python
-ALGORITMOS_DISPONIBLES = ["RandomForest", "XGBoost", "LightGBM"]
-```
+La señal más explotable es la **reversión a la media** (diff lag1 = -0.465):
+cuando el número sube mucho respecto al anterior, tiende a bajar en el siguiente
+sorteo, y viceversa. Esta señal se captura con las features `diff_1`, `diff_2`,
+`diff_abs_1` y `signo_diff_1`.
 
 ---
 
-### 4. Memoria IA (Mejorar el sistema de slots)
+## Mejoras pendientes con mayor potencial
 
-Actualmente hay 2 slots por modelo. Propuesta: aumentar a 3 y agregar metadata:
+### 1. Validación temporal cruzada
 
-```python
-payload = {
-    "model": modelo,
-    "accuracy": float(accuracy),
-    "f1_score": float(f1),
-    "n_features": modelo.n_features_in_,
-    "n_records_trained": len(X),
-    "timestamp": datetime.now().isoformat(),
-    "feature_names": list(feature_columns),
-    "params": modelo.get_params()
-}
-```
+Actualmente se usa un split aleatorio 80/20. El problema es que puede usar
+datos futuros para entrenar, lo que es irreal.
 
-Esto permite saber exactamente con qué features y parámetros se entrenó cada modelo guardado.
-
----
-
-### 5. Validación del Modelo (Métricas más robustas)
-
-Actualmente se usa accuracy en un solo split. Mejorar con validación cruzada temporal:
+La validación correcta para series temporales es `TimeSeriesSplit`:
 
 ```python
 from sklearn.model_selection import TimeSeriesSplit
 
 tscv = TimeSeriesSplit(n_splits=5)
 scores = cross_val_score(modelo, X, y, cv=tscv, scoring="accuracy")
-acc_temporal = scores.mean()
+# scores respetan el orden cronológico: siempre entrena con pasado, evalúa con futuro
 ```
 
-Esto es más realista porque respeta el orden temporal de los datos (no usa datos futuros para entrenar).
+Esto daría una estimación más honesta del accuracy real en producción.
+**Impacto esperado: accuracy reportado baja ~2-3%, pero es más confiable.**
 
----
+### 2. GradientBoosting como alternativa
 
-### 6. Predicción con Confianza
-
-Actualmente la predicción devuelve solo el número. Agregar probabilidad de confianza:
+XGBoost o LightGBM suelen superar a RandomForest en datos tabulares con
+pocos registros. No cambian la estrategia de dígitos, solo el clasificador base:
 
 ```python
-proba = modelo.predict_proba(X_hoy)
-top3 = np.argsort(proba[0])[-3:][::-1]  # top 3 candidatos
+from xgboost import XGBClassifier
 
-for idx in top3:
-    numero = modelo.classes_[idx]
-    confianza = proba[0][idx]
-    print(f"  #{numero} → {confianza:.1%} de confianza")
+modelo = XGBClassifier(
+    n_estimators=200,
+    max_depth=4,
+    learning_rate=0.05,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    use_label_encoder=False,
+    eval_metric="mlogloss"
+)
 ```
 
----
+Para integrarlo hay que agregar `xgboost` a `requirements.txt` y añadirlo
+como opción en el perfil `prod` de `config.py`.
+**Impacto esperado: +2-5% accuracy.**
 
-### 7. Detección de Patrones Cíclicos
+### 3. Features de dígitos para lag2 y lag3
 
-Los números de lotería pueden tener ciclos. Detectarlos con autocorrelación:
+Actualmente se extraen los 4 dígitos solo de `lag1`. Hacer lo mismo para
+`lag2` y `lag3` daría más contexto sobre patrones por posición de dígito.
+Ya está implementado en `feature_engineering.py` para lag1, lag2 y lag3.
+
+### 4. Detección de ciclos con autocorrelación
+
+Si existiera algún ciclo periódico (ej. el dígito de unidades repite cada
+N sorteos), se podría detectar y usar como feature:
 
 ```python
 from statsmodels.tsa.stattools import acf
 
-correlaciones = acf(df["result"], nlags=30)
-ciclos_detectados = [i for i, c in enumerate(correlaciones) if abs(c) > 0.1]
-# Agregar como feature: días desde el último ciclo detectado
+corrs = acf(df["result"], nlags=60)
+picos = [i for i, c in enumerate(corrs[1:], 1) if abs(c) > 0.15]
 ```
+
+Con los datos actuales no se detectaron ciclos significativos, pero puede
+cambiar a medida que se acumulen más registros.
 
 ---
 
-## Prioridad de Implementación
+## Lo que NO vale la pena implementar
 
-| # | Mejora | Impacto | Esfuerzo |
-|---|--------|---------|----------|
-| 1 | Dígitos individuales como features | Alto | Bajo |
-| 2 | Frecuencia histórica del número | Alto | Bajo |
-| 3 | Validación cruzada temporal | Alto | Medio |
-| 4 | XGBoost / LightGBM | Alto | Medio |
-| 5 | Predicción con confianza (top 3) | Medio | Bajo |
-| 6 | Diversidad genética controlada | Medio | Medio |
-| 7 | Metadata en slots de memoria IA | Medio | Bajo |
-| 8 | Crossover de 2 puntos | Bajo | Bajo |
-| 9 | Detección de ciclos (autocorrelación) | Bajo | Alto |
+| Idea | Por qué no |
+|---|---|
+| Redes neuronales (LSTM) | ~1000 registros es insuficiente para entrenar una RNN útil |
+| Más ventanas rolling (14, 60 días) | Redundante con las ventanas 7 y 30 ya presentes |
+| Features del signo zodiacal para predecir el número | Número y signo son independientes según los datos |
+| Lags muy lejanos (lag_15, lag_20) | La señal decae rápido; lag_7 ya captura lo relevante |
+| Ciclos lunares / features astronómicas | No hay correlación estadística con los resultados |
 
 ---
 
-## Ramas Git Recomendadas
+## Límite teórico de accuracy
 
-```
-main              → producción estable (solo merge desde develop)
-develop           → integración de features en desarrollo
-feature/features  → nuevas features de entrenamiento
-feature/xgboost   → integración de XGBoost/LightGBM
-feature/confianza → predicción con probabilidades
-fix/xxx           → correcciones de bugs
-experiment/xxx    → experimentos sin garantía de merge
-```
+Con una lotería bien diseñada y datos verdaderamente aleatorios, el límite
+teórico de accuracy para predecir el número exacto con ~909 clases es ~0.11%
+(azar puro). El sistema actual logra ~25%, lo que sugiere que **sí existen
+patrones explotables** en los datos, principalmente por la reversión a la media
+y la estructura de dígitos.
+
+El límite práctico estimado con los datos disponibles es ~30-35% para result
+y ~20-25% para series, considerando el nivel de ruido inherente.
