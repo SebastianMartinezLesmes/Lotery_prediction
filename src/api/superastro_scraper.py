@@ -18,7 +18,7 @@ import re
 from src.core.logger import LoggerManager
 from src.core.config import settings
 
-logger = LoggerManager.get_logger("superastro_scraper", "scraper.log")
+logger = LoggerManager.get_logger("superastro_scraper")
 
 
 class SuperAstroScraper:
@@ -58,92 +58,86 @@ class SuperAstroScraper:
         signo_upper = signo.upper().strip()
         return self.SIGNOS_MAP.get(signo_upper, signo_upper)
     
+    def _parsear_tabla(self, soup: BeautifulSoup, loteria: str) -> List[Dict]:
+        """
+        Extrae todos los resultados disponibles de la tabla HTML en una sola llamada.
+
+        Returns:
+            Lista de dicts con todos los resultados encontrados en la página.
+        """
+        tablas = soup.find_all('table')
+        if len(tablas) < 2:
+            logger.error("No se encontraron suficientes tablas en la página")
+            return []
+
+        tabla_index = 1 if "LUNA" in loteria.upper() else 0
+        tabla = tablas[tabla_index]
+        filas = tabla.find_all('tr')
+
+        resultados = []
+        for fila in filas[1:]:
+            celdas = fila.find_all('td')
+            if len(celdas) < 3:
+                continue
+
+            fecha_celda = celdas[0].text.strip()
+            numero      = celdas[1].text.strip()
+            signo       = celdas[2].text.strip()
+
+            # Parsear fecha (varios formatos posibles)
+            fecha_obj = None
+            for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y'):
+                try:
+                    fecha_obj = datetime.strptime(fecha_celda, fmt)
+                    break
+                except ValueError:
+                    continue
+            if fecha_obj is None:
+                continue
+
+            numero_limpio = re.sub(r'\D', '', numero)
+            if not numero_limpio or len(numero_limpio) != 4:
+                continue
+
+            resultados.append({
+                'fecha':   fecha_obj.strftime('%Y-%m-%d'),
+                'lottery': loteria,
+                'result':  int(numero_limpio),
+                'series':  self.normalizar_signo(signo)
+            })
+
+        return resultados
+
+    def obtener_todos_resultados_pagina(self, loteria: str) -> List[Dict]:
+        """
+        Obtiene TODOS los resultados disponibles en la página en un solo request.
+        Mucho más eficiente que consultar fecha por fecha.
+        """
+        try:
+            logger.info(f"Obteniendo todos los resultados de {loteria} (1 request)...")
+            response = self.session.get(self.BASE_URL, timeout=settings.SCRAPER_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            resultados = self._parsear_tabla(soup, loteria)
+            logger.info(f"  ✓ {len(resultados)} resultados encontrados en la página")
+            return resultados
+        except Exception as e:
+            logger.error(f"Error obteniendo resultados: {e}")
+            return []
+
     def obtener_resultados_fecha(
         self,
         fecha: datetime,
         loteria: str = "ASTRO LUNA"
     ) -> Optional[Dict]:
-        """
-        Obtiene el resultado de una fecha específica.
-        
-        Args:
-            fecha: Fecha del resultado
-            loteria: "ASTRO SOL" o "ASTRO LUNA"
-        
-        Returns:
-            Diccionario con el resultado o None
-        """
-        try:
-            # La página muestra los últimos resultados por defecto
-            # Necesitamos hacer scraping de la tabla
-            
-            logger.info(f"Obteniendo {loteria} para {fecha.strftime('%Y-%m-%d')}")
-            
-            response = self.session.get(self.BASE_URL, timeout=settings.SCRAPER_REQUEST_TIMEOUT)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Buscar la tabla correcta según la lotería
-            # La página tiene 2 tablas: una para astro sol y otra para astro luna
-            tablas = soup.find_all('table')
-            
-            if len(tablas) < 2:
-                logger.error(f"No se encontraron suficientes tablas en la página")
-                return None
-            
-            # Determinar qué tabla usar
-            # Tabla 0 = ASTRO SOL, Tabla 1 = ASTRO LUNA (generalmente)
-            tabla_index = 1 if "LUNA" in loteria.upper() else 0
-            tabla = tablas[tabla_index]
-            
-            # Extraer filas de la tabla
-            filas = tabla.find_all('tr')
-            
-            fecha_buscar = fecha.strftime('%Y-%m-%d')
-            
-            for fila in filas[1:]:  # Saltar header
-                celdas = fila.find_all('td')
-                
-                if len(celdas) >= 4:
-                    fecha_celda = celdas[0].text.strip()
-                    numero = celdas[1].text.strip()
-                    signo = celdas[2].text.strip()
-                    sorteo = celdas[3].text.strip() if len(celdas) > 3 else ""
-                    
-                    # Convertir fecha de formato dd-mm-yyyy a yyyy-mm-dd
-                    try:
-                        fecha_obj = datetime.strptime(fecha_celda, '%Y-%m-%d')
-                        fecha_str = fecha_obj.strftime('%Y-%m-%d')
-                    except:
-                        # Intentar otros formatos
-                        try:
-                            fecha_obj = datetime.strptime(fecha_celda, '%d-%m-%Y')
-                            fecha_str = fecha_obj.strftime('%Y-%m-%d')
-                        except:
-                            continue
-                    
-                    if fecha_str == fecha_buscar:
-                        # Limpiar número (remover caracteres no numéricos)
-                        numero_limpio = re.sub(r'\D', '', numero)
-                        
-                        if numero_limpio and len(numero_limpio) == 4:
-                            resultado = {
-                                'fecha': fecha_str,
-                                'lottery': loteria,
-                                'result': int(numero_limpio),
-                                'series': self.normalizar_signo(signo)
-                            }
-                            
-                            logger.info(f"  ✓ Encontrado: {numero_limpio} - {signo}")
-                            return resultado
-            
-            logger.warning(f"  ✗ No se encontró resultado para {fecha_buscar}")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error obteniendo resultado: {e}")
-            return None
+        """Obtiene el resultado de una fecha específica (usa caché de página)."""
+        todos = self.obtener_todos_resultados_pagina(loteria)
+        fecha_buscar = fecha.strftime('%Y-%m-%d')
+        for r in todos:
+            if r['fecha'] == fecha_buscar:
+                return r
+        logger.warning(f"  ✗ No se encontró resultado para {fecha_buscar}")
+        return None
     
     def obtener_ultima_fecha(self, excel_path: str, loteria: str) -> datetime:
         """
@@ -188,56 +182,45 @@ class SuperAstroScraper:
     ) -> List[Dict]:
         """
         Actualiza los resultados de una lotería desde la última fecha hasta ayer.
-        
-        Args:
-            loteria: "ASTRO SOL" o "ASTRO LUNA"
-            excel_path: Ruta al archivo Excel
-            hasta_fecha: Fecha límite (por defecto: ayer)
-        
-        Returns:
-            Lista de resultados nuevos obtenidos
+        Obtiene todos los datos en UN solo request y filtra por rango de fechas.
         """
-        # Obtener última fecha
-        desde_fecha = self.obtener_ultima_fecha(excel_path, loteria)
-        
-        # Fecha límite: ayer
+        desde_fecha = self.obtener_ultima_fecha(excel_path, loteria) + timedelta(days=1)
+
         if hasta_fecha is None:
             hasta_fecha = datetime.now() - timedelta(days=1)
-        
-        # Ajustar desde_fecha para no duplicar
-        desde_fecha = desde_fecha + timedelta(days=1)
-        
+
         logger.info(f"\n{'='*70}")
         logger.info(f"ACTUALIZANDO: {loteria}")
         logger.info(f"Desde: {desde_fecha.strftime('%Y-%m-%d')}")
         logger.info(f"Hasta: {hasta_fecha.strftime('%Y-%m-%d')}")
         logger.info('='*70)
-        
-        # Obtener resultados día por día
+
+        if desde_fecha > hasta_fecha:
+            logger.info("Los datos ya están actualizados.")
+            return []
+
+        # Un solo request para todos los datos disponibles
+        todos = self.obtener_todos_resultados_pagina(loteria)
+
+        # Filtrar solo el rango que necesitamos
         resultados_nuevos = []
-        fecha_actual = desde_fecha
-        
-        while fecha_actual <= hasta_fecha:
-            resultado = self.obtener_resultados_fecha(fecha_actual, loteria)
-            
-            if resultado:
-                resultados_nuevos.append(resultado)
-            
-            fecha_actual += timedelta(days=1)
-            
-            # Pausa entre requests
-            if fecha_actual <= hasta_fecha:
-                time.sleep(self.delay)
-        
-        logger.info(f"\n✓ Obtenidos {len(resultados_nuevos)} resultados nuevos para {loteria}")
-        
+        for r in todos:
+            try:
+                fecha_r = datetime.strptime(r['fecha'], '%Y-%m-%d')
+                if desde_fecha <= fecha_r <= hasta_fecha:
+                    resultados_nuevos.append(r)
+            except ValueError:
+                continue
+
+        logger.info(f"✓ {len(resultados_nuevos)} resultados nuevos para {loteria}")
         return resultados_nuevos
     
     def actualizar_todas_loterias(
         self,
         excel_path: str,
         loterias: Optional[List[str]] = None,
-        filtro: Optional[str] = None
+        filtro: Optional[str] = None,
+        repository=None,
     ) -> pd.DataFrame:
         """
         Actualiza las loterías especificadas.
@@ -246,6 +229,8 @@ class SuperAstroScraper:
             excel_path: Ruta al archivo Excel
             loterias: Lista de loterías a actualizar (opcional)
             filtro: Filtro para loterías (opcional)
+            repository: Instancia de LotteriaRepository para sincronizar
+                        también con Neon (opcional, compatibilidad hacia atrás).
         
         Returns:
             DataFrame con todos los resultados nuevos
@@ -297,11 +282,92 @@ class SuperAstroScraper:
                 logger.info(f"  - {loteria}: {count} resultados")
             logger.info('='*70)
             
+            # Sincronizar con Neon si se proporcionó un repository
+            if repository is not None:
+                try:
+                    for loteria_sync in df_nuevos['lottery'].unique():
+                        self.sincronizar_con_neon(str(loteria_sync), repository)
+                except Exception as e:
+                    logger.warning(f"Error al sincronizar con Neon: {e}")
+
             return df_nuevos
         else:
             logger.info("\nNo se obtuvieron resultados nuevos")
+            # Si se pasó un repository, intentar sincronizar con Neon aunque no haya
+            # registros nuevos para Excel (por si Neon está desactualizado)
+            if repository is not None:
+                try:
+                    for loteria in loterias:
+                        self.sincronizar_con_neon(loteria, repository)
+                except Exception as e:
+                    logger.warning(f"Error al sincronizar con Neon: {e}")
             return pd.DataFrame()
     
+    def sincronizar_con_neon(self, loteria: str, repository) -> int:
+        """
+        Sincroniza los resultados de la lotería con Neon PostgreSQL.
+
+        1. Obtiene MAX(fecha) de Neon via repository.get_last_date().
+        2. Si fecha == ayer, retorna 0 (ya actualizado).
+        3. Si no, obtiene todos los resultados de la página y filtra el rango.
+        4. Llama a repository.upsert_results() con los nuevos registros.
+        5. Retorna número de registros insertados/actualizados.
+
+        Args:
+            loteria:    Nombre de la lotería (ej: "ASTRO LUNA").
+            repository: Instancia de LotteriaRepository.
+
+        Returns:
+            Número de registros insertados/actualizados.
+        """
+        from datetime import datetime, timedelta
+
+        ayer = (datetime.now() - timedelta(days=1)).date()
+
+        # 1. Última fecha en Neon
+        ultima_fecha = repository.get_last_date(loteria)
+        logger.info(f"sincronizar_con_neon({loteria}): última fecha en Neon = {ultima_fecha}")
+
+        # 2. ¿Ya está actualizado?
+        if ultima_fecha is not None and ultima_fecha >= ayer:
+            logger.info(f"  {loteria}: ya actualizado hasta {ultima_fecha}. Nada que hacer.")
+            return 0
+
+        # 3. Obtener todos los datos disponibles en la página
+        todos = self.obtener_todos_resultados_pagina(loteria)
+
+        # Filtrar rango que falta
+        if ultima_fecha is not None:
+            desde = ultima_fecha + timedelta(days=1)
+        else:
+            # Si no hay ningún dato en Neon, traer todo
+            desde = None
+
+        nuevos = []
+        for r in todos:
+            try:
+                fecha_r = datetime.strptime(r["fecha"], "%Y-%m-%d").date()
+                if desde is None or fecha_r >= desde:
+                    nuevos.append({
+                        "fecha":   fecha_r,
+                        "loteria": r["lottery"],
+                        "result":  int(r["result"]),
+                        "series":  r["series"],
+                    })
+            except (ValueError, KeyError):
+                continue
+
+        if not nuevos:
+            logger.info(f"  {loteria}: no hay registros nuevos para sincronizar.")
+            return 0
+
+        logger.info(f"  {loteria}: sincronizando {len(nuevos)} registros en Neon...")
+
+        # 4. Upsert en Neon
+        n = repository.upsert_results(nuevos)
+        logger.info(f"  {loteria}: {n} registros upserted en Neon.")
+        return n
+
     def guardar_resultados(self, df_nuevos: pd.DataFrame, excel_path: str):
         """
         Guarda los resultados nuevos en el archivo Excel.

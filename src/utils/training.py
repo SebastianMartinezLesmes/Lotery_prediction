@@ -108,7 +108,7 @@ def entrenar_modelo_result(X_train, y_train, random_state, warm_start_model=None
         modelo.warm_start = False
     else:
         modelo = RandomForestClassifier(
-            n_estimators=200,
+            n_estimators=50,
             max_depth=4,
             min_samples_split=5,
             class_weight=class_weights,
@@ -403,6 +403,8 @@ def entrenar_modelos(
                 tipo_modelo="result",
                 modelo=mejor_modelo_result,
                 accuracy=mejor_acc_result,
+                f1_score=history["result_f1"][-1] if history["result_f1"] else None,
+                n_records=len(X),
             )
 
             guardar_modelo_si_mejora(
@@ -410,6 +412,8 @@ def entrenar_modelos(
                 tipo_modelo="series",
                 modelo=mejor_modelo_series,
                 accuracy=mejor_acc_series,
+                f1_score=history["series_f1"][-1] if history["series_f1"] else None,
+                n_records=len(X),
             )
 
         except Exception as e:

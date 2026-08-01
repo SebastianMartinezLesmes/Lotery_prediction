@@ -756,5 +756,5 @@ Las contribuciones son bienvenidas. Por favor:
 ---
 
 **Versión:** 2.0 (Post-limpieza)  
-**Última actualización:** Febrero 2026  
+**Última actualización:** Abril 2026  
 **Estado:** ✅ Producción

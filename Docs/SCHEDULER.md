@@ -1,490 +1,140 @@
-# ⏰ Scheduler - Entrenamientos Automáticos
+# Automatización — GitHub Actions
 
-## Descripción
-
-Sistema de programación automática para ejecutar entrenamientos, recolección de datos y pipeline completo de forma periódica sin intervención manual.
-
----
-
-## ✨ Características
-
-- **Múltiples backends**: schedule, APScheduler, cron
-- **Tareas configurables**: Entrenamiento, recolección, pipeline completo
-- **Expresiones cron**: Programación flexible
-- **Shutdown graceful**: Manejo de señales SIGINT/SIGTERM
-- **Logging completo**: Registro de todas las ejecuciones
-- **Timeout protection**: Límites de tiempo por tarea
-- **Docker ready**: Integración con Docker Compose
+El sistema de actualización automática corre en GitHub Actions.
+No hay scheduler local — toda la automatización es declarativa en el workflow.
 
 ---
 
-## 🚀 Inicio Rápido
+## Workflow: Auto_Neon_Sync
 
-### Opción 1: Scheduler Simple (schedule)
+Archivo: `.github/workflows/sync_neon.yml`
 
-```bash
-# Instalar dependencia
-pip install schedule
+### Cuándo se ejecuta
 
-# Ejecutar
-python scripts/scheduler.py --mode simple
-```
+| Trigger | Configuración |
+|---|---|
+| Automático | Cada 3 días a las **12:00 UTC** (`0 12 */3 * *`) |
+| Manual | Desde GitHub → Actions → Auto_Neon_Sync → Run workflow |
 
-### Opción 2: Scheduler Avanzado (APScheduler)
+### Qué hace
 
-```bash
-# Instalar dependencia
-pip install apscheduler
+1. Checkout del repositorio
+2. Instala Python 3.11 + dependencias (con cache de pip)
+3. Llama a `synchronize_database()` de `src/database/sync.py`
+4. La función obtiene `MAX(fecha)` de Neon para cada lotería
+5. Descarga solo los registros que faltan desde SuperAstro
+6. Hace upsert en Neon (nunca duplica, nunca borra)
+7. Genera un resumen visible en la pestaña de Actions
 
-# Ejecutar
-python scripts/scheduler.py --mode apscheduler
-```
+### Configuración requerida
 
-### Opción 3: Cron (Linux/Mac)
-
-```bash
-# Generar crontab
-python scripts/scheduler.py --mode crontab
-
-# Instalar crontab
-crontab crontab.txt
-
-# Verificar
-crontab -l
-```
-
----
-
-## ⚙️ Configuración
-
-### Variables de Entorno
-
-Agregar al archivo `.env`:
-
-```env
-# Schedule Simple
-SCHEDULE_COLLECT_DAILY=08:00
-SCHEDULE_TRAIN_WEEKLY="Sunday 02:00"
-
-# APScheduler (formato cron: minuto hora dia mes dia_semana)
-SCHEDULE_COLLECT_CRON="0 8 * * *"      # Diario 8:00 AM
-SCHEDULE_TRAIN_CRON="0 2 * * 0"        # Domingos 2:00 AM
-SCHEDULE_PIPELINE_CRON="0 3 1 * *"     # Día 1 de cada mes 3:00 AM
-```
-
-### Formato Cron
+En GitHub → Settings → Secrets and variables → Actions:
 
 ```
-┌───────────── minuto (0 - 59)
-│ ┌───────────── hora (0 - 23)
-│ │ ┌───────────── día del mes (1 - 31)
-│ │ │ ┌───────────── mes (1 - 12)
-│ │ │ │ ┌───────────── día de la semana (0 - 6) (Domingo=0)
-│ │ │ │ │
-* * * * *
+NEON_DATABASE_URL = postgresql://usuario:password@host.neon.tech/dbname?sslmode=require
 ```
 
-**Ejemplos:**
-- `0 8 * * *` - Todos los días a las 8:00 AM
-- `0 2 * * 0` - Todos los domingos a las 2:00 AM
-- `0 3 1 * *` - Día 1 de cada mes a las 3:00 AM
-- `*/30 * * * *` - Cada 30 minutos
-- `0 */6 * * *` - Cada 6 horas
-- `0 0 * * 1-5` - Lunes a viernes a medianoche
+El workflow mapea el secret a la variable de entorno `DATABASE_URL`,
+que es la que lee `NeonConnection` internamente.
 
----
+### Ejecución manual con filtro
 
-## 📋 Tareas Disponibles
+Desde GitHub UI al ejecutar manualmente, se puede pasar un filtro de lotería:
 
-### 1. Recolección de Datos
-
-Ejecuta `python main.py --collect`
-
-**Configuración:**
-```env
-SCHEDULE_COLLECT_CRON="0 8 * * *"  # Diario 8:00 AM
+```
+filtro_loteria: luna     → solo ASTRO LUNA
+filtro_loteria: sol      → solo ASTRO SOL
+filtro_loteria: (vacío)  → todas las loterías
 ```
 
-**Uso:**
-- Actualiza datos desde la API
-- Genera archivo Excel actualizado
-- Timeout: 10 minutos
+### Resumen de ejecución
 
-### 2. Entrenamiento de Modelos
+Cada run genera un resumen en la pestaña Summary de GitHub Actions:
 
-Ejecuta `python main.py --train`
-
-**Configuración:**
-```env
-SCHEDULE_TRAIN_CRON="0 2 * * 0"  # Domingos 2:00 AM
 ```
+🎯 Sincronización Neon — 2026-08-01 12:00 UTC
 
-**Uso:**
-- Entrena todos los modelos
-- Genera alertas si rendimiento bajo
-- Timeout: 2 horas
-
-### 3. Pipeline Completo
-
-Ejecuta `python index.py`
-
-**Configuración:**
-```env
-SCHEDULE_PIPELINE_CRON="0 3 1 * *"  # Mensual
-```
-
-**Uso:**
-- Dependencias + Recolección + Predicción
-- Limpieza de caché
-- Timeout: 1 hora
-
----
-
-## 🔧 Uso Detallado
-
-### Scheduler Simple (schedule)
-
-**Ventajas:**
-- Fácil de usar
-- Sintaxis legible
-- Ideal para desarrollo
-
-**Limitaciones:**
-- No soporta días del mes específicos
-- Menos opciones de configuración
-
-**Ejemplo:**
-```python
-import schedule
-
-# Cada día a las 8:00
-schedule.every().day.at("08:00").do(ejecutar_recoleccion)
-
-# Cada domingo a las 2:00
-schedule.every().sunday.at("02:00").do(ejecutar_entrenamiento)
-
-# Cada hora
-schedule.every().hour.do(ejecutar_prediccion)
-
-# Cada 30 minutos
-schedule.every(30).minutes.do(verificar_alertas)
-```
-
-### Scheduler Avanzado (APScheduler)
-
-**Ventajas:**
-- Expresiones cron completas
-- Múltiples triggers
-- Persistencia de jobs
-- Ideal para producción
-
-**Ejemplo:**
-```python
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
-
-scheduler = BlockingScheduler()
-
-# Diario 8:00 AM
-scheduler.add_job(
-    ejecutar_recoleccion,
-    CronTrigger.from_crontab("0 8 * * *"),
-    id='recoleccion_diaria'
-)
-
-# Domingos 2:00 AM
-scheduler.add_job(
-    ejecutar_entrenamiento,
-    CronTrigger.from_crontab("0 2 * * 0"),
-    id='entrenamiento_semanal'
-)
-
-scheduler.start()
-```
-
-### Cron (Linux/Mac)
-
-**Ventajas:**
-- Nativo del sistema operativo
-- Muy confiable
-- No requiere proceso Python corriendo
-
-**Archivo crontab generado:**
-```cron
-# Recolección diaria 8:00 AM
-0 8 * * * cd /path/to/project && python main.py --collect >> logs/cron.log 2>&1
-
-# Entrenamiento semanal (domingos 2:00 AM)
-0 2 * * 0 cd /path/to/project && python main.py --train >> logs/cron.log 2>&1
-
-# Pipeline mensual (día 1, 3:00 AM)
-0 3 1 * * cd /path/to/project && python index.py >> logs/cron.log 2>&1
-```
-
-**Comandos útiles:**
-```bash
-# Ver crontab actual
-crontab -l
-
-# Editar crontab
-crontab -e
-
-# Eliminar crontab
-crontab -r
-
-# Ver logs de cron
-tail -f /var/log/syslog | grep CRON
+| Campo                   | Valor              |
+|-------------------------|--------------------|
+| Registros sincronizados | 6                  |
+| Filtro aplicado         | Todas las loterías |
+| Trigger                 | schedule           |
 ```
 
 ---
 
-## 🐳 Docker Integration
+## Lógica de sincronización incremental
 
-### Docker Compose
+El workflow **nunca descarga todo el histórico** en cada ejecución.
 
-El servicio `lottery-scheduler` ejecuta el scheduler automáticamente:
+Flujo en `SuperAstroScraper.sincronizar_con_neon()`:
+
+```
+1. ultima_fecha = repository.get_last_date(loteria)
+        ↓
+2. Si ultima_fecha >= ayer → ya actualizado, retorna 0
+        ↓
+3. Hace 1 solo request a superastro.com.co
+        ↓
+4. Filtra resultados con fecha > ultima_fecha
+        ↓
+5. repository.upsert_results(nuevos)
+        ↓
+6. Retorna cantidad de registros insertados/actualizados
+```
+
+Esto garantiza:
+- Mínimo tráfico de red (1 request por lotería)
+- Sin duplicados (constraint UNIQUE en la DB)
+- Sin borrados accidentales
+- Idempotente: ejecutar N veces da el mismo resultado
+
+---
+
+## Frecuencia y cron
+
+La expresión `0 12 */3 * *` ejecuta los días 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31
+de cada mes a las 12:00 UTC. Es la aproximación más cercana a "cada 3 días exactos"
+que soporta la sintaxis cron estándar.
+
+Para cambiar la frecuencia, editar la línea `cron:` en el workflow:
 
 ```yaml
-lottery-scheduler:
-  image: lottery-prediction:latest
-  command: python scripts/scheduler.py --mode apscheduler
-  restart: unless-stopped
-```
-
-**Comandos:**
-```bash
-# Iniciar scheduler
-docker-compose up -d lottery-scheduler
-
-# Ver logs
-docker-compose logs -f lottery-scheduler
-
-# Detener
-docker-compose stop lottery-scheduler
-
-# Reiniciar
-docker-compose restart lottery-scheduler
+# Ejemplos
+- cron: '0 12 */3 * *'   # cada 3 días al mediodía UTC (actual)
+- cron: '0 12 */2 * *'   # cada 2 días
+- cron: '0 12 * * *'     # diario
+- cron: '0 12 * * 1'     # cada lunes
 ```
 
 ---
 
-## 🧪 Testing
+## Credenciales — buenas prácticas
 
-### Ejecutar Tarea Inmediatamente
+- La URL de Neon **nunca debe estar en código ni en el repositorio**
+- Se gestiona exclusivamente como secret en GitHub Actions
+- Localmente se define en `.env` (que está en `.gitignore`)
+- El archivo `z_cred` también está en `.gitignore` — sirve como referencia
+  local sin credenciales reales
 
-```bash
-# Probar pipeline
-python scripts/scheduler.py --run pipeline
-
-# Probar entrenamiento
-python scripts/scheduler.py --run train
-
-# Probar recolección
-python scripts/scheduler.py --run collect
-```
-
-### Verificar Configuración
-
-```bash
-# Ver próximas ejecuciones (APScheduler)
-python scripts/scheduler.py --mode apscheduler
-# Presionar Ctrl+C después de ver el listado
-```
+Si se sospecha que la URL fue expuesta (ej. commiteada por error):
+1. Ir a Neon Dashboard → proyecto → Settings → Reset password
+2. Actualizar el secret `NEON_DATABASE_URL` en GitHub con la nueva URL
+3. Actualizar el `.env` local
 
 ---
 
-## 📊 Monitoreo
+## Scheduler local (opcional)
 
-### Logs
+`scripts/scheduler.py` existe como alternativa local si se necesita ejecutar
+el pipeline en un servidor propio sin GitHub Actions. No está integrado en el
+workflow principal.
 
-Todos los eventos se registran en `logs/scheduler.log`:
-
+Para ejecutarlo localmente:
 ```bash
-# Ver logs en tiempo real
-tail -f logs/scheduler.log
-
-# Buscar errores
-grep ERROR logs/scheduler.log
-
-# Ver últimas 50 líneas
-tail -n 50 logs/scheduler.log
+python scripts/scheduler.py
 ```
 
-### Formato de Logs
-
-```
-2026-02-27 08:00:00 - scheduler - INFO - Iniciando recolección de datos programada
-2026-02-27 08:00:15 - scheduler - INFO - Recolección completada exitosamente
-2026-02-27 02:00:00 - scheduler - INFO - Iniciando entrenamiento programado
-2026-02-27 03:45:30 - scheduler - INFO - Entrenamiento completado exitosamente
-```
-
-### Alertas de Scheduler
-
-El scheduler puede generar alertas si:
-- Una tarea falla
-- Una tarea excede el timeout
-- Hay errores de ejecución
-
----
-
-## 🔄 Casos de Uso
-
-### 1. Actualización Diaria de Datos
-
-```env
-SCHEDULE_COLLECT_CRON="0 8 * * *"
-```
-
-Recolecta datos nuevos cada mañana a las 8:00 AM.
-
-### 2. Entrenamiento Semanal
-
-```env
-SCHEDULE_TRAIN_CRON="0 2 * * 0"
-```
-
-Re-entrena modelos cada domingo a las 2:00 AM cuando hay menos carga.
-
-### 3. Mantenimiento Mensual
-
-```env
-SCHEDULE_PIPELINE_CRON="0 3 1 * *"
-```
-
-Ejecuta pipeline completo el primer día de cada mes.
-
-### 4. Predicciones Frecuentes
-
-```env
-SCHEDULE_PREDICT_CRON="0 */6 * * *"
-```
-
-Genera predicciones cada 6 horas.
-
-### 5. Backup Automático
-
-```cron
-# Backup diario a las 4:00 AM
-0 4 * * * cd /path/to/project && tar czf backups/backup-$(date +\%Y\%m\%d).tar.gz IA_models data
-```
-
----
-
-## 🚨 Troubleshooting
-
-### Problema: Scheduler no inicia
-
-```bash
-# Verificar dependencias
-pip install schedule apscheduler
-
-# Ver logs
-python scripts/scheduler.py --mode simple
-```
-
-### Problema: Tareas no se ejecutan
-
-```bash
-# Verificar configuración
-echo $SCHEDULE_COLLECT_CRON
-
-# Probar manualmente
-python scripts/scheduler.py --run collect
-```
-
-### Problema: Timeout en entrenamiento
-
-Ajustar timeout en `scripts/scheduler.py`:
-
-```python
-result = subprocess.run(
-    [sys.executable, "main.py", "--train"],
-    timeout=7200  # Aumentar a 3 horas
-)
-```
-
-### Problema: Cron no ejecuta
-
-```bash
-# Verificar servicio cron
-sudo service cron status
-
-# Ver logs de cron
-grep CRON /var/log/syslog
-
-# Verificar permisos
-ls -la /path/to/project
-```
-
----
-
-## 🔒 Seguridad
-
-### Permisos
-
-```bash
-# Dar permisos de ejecución
-chmod +x scripts/scheduler.py
-
-# Ejecutar como usuario específico
-sudo -u lottery python scripts/scheduler.py
-```
-
-### Secrets
-
-No incluir credenciales en crontab. Usar variables de entorno:
-
-```cron
-# Cargar .env antes de ejecutar
-0 8 * * * cd /path/to/project && source .env && python main.py --collect
-```
-
----
-
-## 📈 Mejores Prácticas
-
-1. **Horarios off-peak**: Programar entrenamientos en horarios de baja carga
-2. **Timeouts**: Configurar límites de tiempo para evitar bloqueos
-3. **Logging**: Registrar todas las ejecuciones
-4. **Monitoreo**: Revisar logs regularmente
-5. **Alertas**: Configurar notificaciones para fallos
-6. **Backup**: Respaldar modelos antes de re-entrenar
-7. **Testing**: Probar tareas manualmente antes de programar
-8. **Redundancia**: Usar múltiples métodos de programación
-
----
-
-## 🔄 Migración
-
-### De Cron a APScheduler
-
-```bash
-# 1. Generar crontab actual
-crontab -l > old_crontab.txt
-
-# 2. Convertir a formato APScheduler
-# Editar .env con expresiones cron
-
-# 3. Iniciar APScheduler
-python scripts/scheduler.py --mode apscheduler
-
-# 4. Verificar funcionamiento
-
-# 5. Eliminar crontab antiguo
-crontab -r
-```
-
----
-
-## 📚 Referencias
-
-- [schedule Documentation](https://schedule.readthedocs.io/)
-- [APScheduler Documentation](https://apscheduler.readthedocs.io/)
-- [Cron Expression](https://crontab.guru/)
-
----
-
-**Versión:** 1.0  
-**Fecha:** Febrero 2026  
-**Estado:** ✅ Producción
+Para producción en servidor propio se recomienda usar GitHub Actions
+en vez del scheduler local — es más simple, no requiere un proceso
+corriendo 24/7 y tiene logs integrados.

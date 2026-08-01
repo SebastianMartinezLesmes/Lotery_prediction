@@ -15,18 +15,53 @@ class Settings:
     """Configuración global del sistema."""
 
     # ======================================================
-    # CONFIGURACIÓN DE IA
+    # MODO DE ENTRENAMIENTO
+    # test  → ejecución rápida, comprobación de funcionamiento
+    # prod  → entrenamiento realista, mejor parametrizado
     # ======================================================
 
-    TRAINING_CONFIGURE = {
-        "min_accuracy": 0.05,         # reemplaza TRAINING_MIN_ACCURACY
-        "iterations": 2,             # reemplaza ITERATIONS
-        "max_iterations": 10,         # reemplaza TRAINING_MAX_ITER
-        "max_training_logs": 3,       # reemplaza MAX_TRAINING_LOGS
-        "min_records": 50,            # reemplaza min_records del antiguo TRAINING_CONFIG
-        "training_verbose": True,     # reemplaza TRAINING_VERBOSE
-        "max_training_logs": 3      
+    TRAINING_MODE: str = os.getenv("TRAINING_MODE", "prod").lower()
+
+    # Perfiles por modo
+    _TRAINING_PROFILES: dict = {
+        "test": {
+            "min_accuracy":      0.01,
+            "max_iter":          2,
+            "n_estimators":      [20, 30],
+            "max_depth":         [3, 4],
+            "min_samples_split": [4],
+            "test_size":         0.3,
+            "min_records":       20,
+            "verbose":           True,
+            "n_jobs":            1,      # secuencial en test
+            "patience":          2,      # no aplica en test pero se define
+        },
+        "prod": {
+            "min_accuracy":      0.05,
+            "max_iter":          60,     # iteraciones totales
+            "n_estimators":      [100, 150, 200, 250, 300],
+            "max_depth":         [4, 5, 6, 8, None],
+            "min_samples_split": [2, 3, 5, 7],
+            "test_size":         0.2,
+            "min_records":       50,
+            "verbose":           True,
+            "n_jobs":            -1,     # usa todos los núcleos disponibles
+            "patience":          20,     # early stop si no mejora en 20 iter
+        },
     }
+
+    @classmethod
+    def get_training_profile(cls) -> dict:
+        """Retorna el perfil de entrenamiento según TRAINING_MODE.
+        Lee os.environ en tiempo de ejecución para respetar cambios por CLI."""
+        mode = os.getenv("TRAINING_MODE", "prod").lower()
+        if mode not in cls._TRAINING_PROFILES:
+            print(f"⚠️  TRAINING_MODE='{mode}' desconocido. Usando 'prod'.")
+            mode = "prod"
+        return cls._TRAINING_PROFILES[mode]
+
+    # TRAINING_CONFIGURE se construye dinámicamente (ver ensure_directories)
+    TRAINING_CONFIGURE: dict = {}
 
 
     MODEL_TYPES = ["result", "series"]
@@ -39,9 +74,9 @@ class Settings:
     # EVOLUTIONARY TRAINING CONFIG
     # ======================================================
 
-    EVOLUTION_GENERATIONS = 150
-    EVOLUTION_POPULATION_SIZE = 120
-    EVOLUTION_ELITE_SIZE = 10
+    EVOLUTION_GENERATIONS = 10
+    EVOLUTION_POPULATION_SIZE = 8
+    EVOLUTION_ELITE_SIZE = 3
 
     EVOLUTIONARY_MAX_ITERATIONS = 10000
     EVOLUTIONARY_PATIENCE = 100
@@ -51,13 +86,13 @@ class Settings:
     # RANDOM FOREST SEARCH SPACE
     # ======================================================
 
-    RF_N_ESTIMATORS_RANGE = (50, 400)
-    RF_MAX_DEPTH_OPTIONS = [3, 4, 5, 6, 8, 10, None]
-    RF_MIN_SAMPLES_SPLIT_RANGE = (2, 10)
+    RF_N_ESTIMATORS_RANGE = (20, 100)
+    RF_MAX_DEPTH_OPTIONS = [3, 4, 5, 6, None]
+    RF_MIN_SAMPLES_SPLIT_RANGE = (2, 8)
 
     MUTATION_PROBABILITY = 0.4
     MUTATION_ESTIMATOR_STEP = 50
-    N_JOBS = -1 
+    N_JOBS = 1   # 1 = sin paralelismo (evita MemoryError en equipos con poca RAM)
 
     mutations = {
         "n_estimators": [100, 150, 200, 250, 300],
@@ -111,12 +146,16 @@ class Settings:
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
     MODELS_DIR: Path = BASE_DIR / os.getenv("MODELS_DIR", "IA_models")
     DATA_DIR: Path = BASE_DIR / os.getenv("DATA_DIR", "data")
-    LOGS_DIR: Path = BASE_DIR / os.getenv("LOGS_DIR", "logs")
 
-#-------------------------------------------------------------------------------------------------------
     # ======================================================
     # API CONFIG
     # ======================================================
+
+    # ======================================================
+    # DATABASE CONFIG
+    # ======================================================
+
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     API_URL: str = os.getenv("BASE_URL", "https://superastro.com.co/historico.php")
     CLAVES_UNICAS: list[str] = ["fecha", "lottery", "result", "series"]
@@ -142,6 +181,12 @@ class Settings:
     
     # ======================================================
     # LOTTERY CONFIG
+    # ======================================================
+
+
+#-------------------------------------------------------------------------------------------------------
+    # ======================================================
+    # API CONFIG
     # ======================================================
 
     FIND_LOTERY: str = os.getenv("FIND_LOTERY", "ASTRO")
@@ -173,7 +218,6 @@ class Settings:
         "true"
     ).lower() == "true"
 
-
     # ======================================================
     # LOGGING
     # ======================================================
@@ -197,10 +241,12 @@ class Settings:
         """Retorna la ruta completa al archivo Excel."""
         return cls.DATA_DIR / cls.EXCEL_FILENAME
 
+
     @classmethod
     def get_results_path(cls) -> Path:
         """Retorna la ruta completa al archivo de resultados JSON."""
         return cls.DATA_DIR / cls.RESULTS_JSON
+
 
     @classmethod
     def get_model_path(cls, lottery_name: str, model_type: str) -> Path:
@@ -210,12 +256,23 @@ class Settings:
         filename = f"modelo_{model_type}_{lottery_name.lower().replace(' ', '_')}.pkl"
         return cls.MODELS_DIR / filename
 
+
     @classmethod
     def ensure_directories(cls) -> None:
-        """Crea los directorios necesarios si no existen."""
+        """Crea los directorios necesarios y construye TRAINING_CONFIGURE."""
         cls.MODELS_DIR.mkdir(parents=True, exist_ok=True)
         cls.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        cls.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        # Construir TRAINING_CONFIGURE desde el perfil activo
+        profile = cls.get_training_profile()
+        cls.TRAINING_CONFIGURE = {
+            "min_accuracy":    profile["min_accuracy"],
+            "max_iterations":  profile["max_iter"],
+            "min_records":     profile["min_records"],
+            "training_verbose": profile["verbose"],
+            # legacy keys usadas en código existente
+            "iterations":      profile["max_iter"],
+            "max_training_logs": 3,
+        }
 
 
 # Instancia global
