@@ -25,24 +25,28 @@ class Settings:
     # Perfiles por modo
     _TRAINING_PROFILES: dict = {
         "test": {
-            "min_accuracy":      0.01,        # umbral bajo para no bloquear
-            "max_iter":          2,            # solo 2 iteraciones
+            "min_accuracy":      0.01,
+            "max_iter":          2,
             "n_estimators":      [20, 30],
             "max_depth":         [3, 4],
             "min_samples_split": [4],
             "test_size":         0.3,
-            "min_records":       20,           # permite datos escasos
+            "min_records":       20,
             "verbose":           True,
+            "n_jobs":            1,      # secuencial en test
+            "patience":          2,      # no aplica en test pero se define
         },
         "prod": {
-            "min_accuracy":      0.05,         # umbral realista
-            "max_iter":          30,           # 30 iteraciones de búsqueda
+            "min_accuracy":      0.05,
+            "max_iter":          60,     # iteraciones totales
             "n_estimators":      [100, 150, 200, 250, 300],
             "max_depth":         [4, 5, 6, 8, None],
             "min_samples_split": [2, 3, 5, 7],
             "test_size":         0.2,
             "min_records":       50,
             "verbose":           True,
+            "n_jobs":            -1,     # usa todos los núcleos disponibles
+            "patience":          20,     # early stop si no mejora en 20 iter
         },
     }
 
