@@ -18,7 +18,7 @@ import re
 from src.core.logger import LoggerManager
 from src.core.config import settings
 
-logger = LoggerManager.get_logger("superastro_scraper", "scraper.log")
+logger = LoggerManager.get_logger("superastro_scraper")
 
 
 class SuperAstroScraper:

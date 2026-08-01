@@ -3,7 +3,9 @@ Entrenamiento simplificado: predice cada dígito del número por separado.
 - 4 modelos para result (miles, centenas, decenas, unidades)
 - 1 modelo para series (12 clases zodiacales)
 
-Mucho más eficiente que clasificar 909+ clases únicas directamente.
+Modos:
+  test  → 2 iteraciones, árboles pequeños, verificación rápida
+  prod  → 30 iteraciones, búsqueda amplia de hiperparámetros
 """
 import os
 import joblib
@@ -70,11 +72,11 @@ class _ModeloCompuesto:
 # ============================================================
 
 def _entrenar_rf(X_train, y_train, X_test, y_test,
-                 n_estimators=100, max_depth=6, seed=42):
+                 n_estimators=100, max_depth=6, seed=42, min_samples_split=4):
     model = RandomForestClassifier(
         n_estimators=n_estimators,
         max_depth=max_depth,
-        min_samples_split=4,
+        min_samples_split=min_samples_split,
         class_weight="balanced",
         random_state=seed,
         n_jobs=1
@@ -91,12 +93,15 @@ def _entrenar_rf(X_train, y_train, X_test, y_test,
 def entrenar_modelos_por_loteria(
     X, y_result, y_series,
     nombre_loteria,
-    min_acc=0.05,
-    max_iter=5,
-    verbose=True
+    min_acc=None,
+    max_iter=None,
+    verbose=True,
 ):
     """
     Entrena modelos para una lotería con loop de mejora iterativo.
+
+    Los parámetros min_acc y max_iter se toman del perfil activo
+    (settings.TRAINING_MODE = 'test' | 'prod') si no se pasan explícitamente.
 
     Estrategia:
     - Descompone el número en 4 dígitos (miles, centenas, decenas, unidades)
@@ -104,13 +109,29 @@ def entrenar_modelos_por_loteria(
     - Repite max_iter veces con distintos seeds e hiperparámetros
     - Guarda solo si supera el modelo previo en IA_models/
     """
+    from src.core.config import settings
+
+    profile   = settings.get_training_profile()
+    min_acc   = min_acc  if min_acc  is not None else profile["min_accuracy"]
+    max_iter  = max_iter if max_iter is not None else profile["max_iter"]
+    test_size = profile["test_size"]
+
+    # Espacio de búsqueda según perfil
+    n_est_options   = profile["n_estimators"]
+    depth_options   = profile["max_depth"]
+    split_options   = profile["min_samples_split"]
+
+    mode_label = settings.TRAINING_MODE.upper()
+
     if verbose:
         print(f"\n{'='*60}")
-        print(f"Entrenando: {nombre_loteria.upper()}")
+        print(f"Modo: {mode_label}  |  Entrenando: {nombre_loteria.upper()}")
         print(f"Registros: {len(X)} | Features: {X.shape[1]}")
         print(f"Clases result únicas: {len(np.unique(y_result))}")
         print(f"Clases series únicas: {len(np.unique(y_series))}")
-        print(f"Iteraciones de mejora: {max_iter}")
+        print(f"Iteraciones: {max_iter}  |  test_size: {test_size}")
+        print(f"n_estimators: {n_est_options}")
+        print(f"max_depth: {depth_options}")
         print('='*60)
 
     # Descomponer número en dígitos
@@ -155,8 +176,9 @@ def entrenar_modelos_por_loteria(
     # Loop de mejora
     for intento in range(1, max_iter + 1):
         seed  = np.random.randint(0, 10000)
-        n_est = int(np.random.choice([50, 75, 100, 150]))
-        depth = np.random.choice([4, 5, 6, 8, None])
+        n_est = int(np.random.choice(n_est_options))
+        depth = np.random.choice(depth_options)
+        split = int(np.random.choice(split_options))
 
         X_tr, X_te, \
         ym_tr, ym_te, \
@@ -165,14 +187,14 @@ def entrenar_modelos_por_loteria(
         yu_tr, yu_te, \
         ys_tr, ys_te = train_test_split(
             X, y_miles, y_centenas, y_decenas, y_unidades, y_series,
-            test_size=0.2, random_state=seed
+            test_size=test_size, random_state=seed
         )
 
-        m_m, acc_m = _entrenar_rf(X_tr, ym_tr, X_te, ym_te, n_est, depth, seed)
-        m_c, acc_c = _entrenar_rf(X_tr, yc_tr, X_te, yc_te, n_est, depth, seed)
-        m_d, acc_d = _entrenar_rf(X_tr, yd_tr, X_te, yd_te, n_est, depth, seed)
-        m_u, acc_u = _entrenar_rf(X_tr, yu_tr, X_te, yu_te, n_est, depth, seed)
-        m_s, acc_s = _entrenar_rf(X_tr, ys_tr, X_te, ys_te, 100, 8, seed)
+        m_m, acc_m = _entrenar_rf(X_tr, ym_tr, X_te, ym_te, n_est, depth, seed, split)
+        m_c, acc_c = _entrenar_rf(X_tr, yc_tr, X_te, yc_te, n_est, depth, seed, split)
+        m_d, acc_d = _entrenar_rf(X_tr, yd_tr, X_te, yd_te, n_est, depth, seed, split)
+        m_u, acc_u = _entrenar_rf(X_tr, yu_tr, X_te, yu_te, n_est, depth, seed, split)
+        m_s, acc_s = _entrenar_rf(X_tr, ys_tr, X_te, ys_te, n_est, depth, seed, split)
 
         acc_result = (acc_m + acc_c + acc_d + acc_u) / 4
 

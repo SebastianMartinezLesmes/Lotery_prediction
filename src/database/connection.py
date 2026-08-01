@@ -11,7 +11,7 @@ from src.core.logger import LoggerManager
 
 load_dotenv()
 
-logger = LoggerManager.get_logger("neon_connection", "log_loteria.log")
+logger = LoggerManager.get_logger("neon_connection")
 
 
 class NeonConnection:

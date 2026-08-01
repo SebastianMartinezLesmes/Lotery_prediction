@@ -74,20 +74,28 @@ def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
         return False
 
 
-def ejecutar_entrenamiento(loteria: Optional[str] = None) -> bool:
+def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = None) -> bool:
     """
     2. Entrena modelos de ML con features avanzadas.
-    
+
     Args:
         loteria: Nombre específico de lotería (opcional)
+        modo: 'test' o 'prod'. Sobreescribe TRAINING_MODE del .env si se pasa.
     """
     try:
+        # ── Aplicar modo si se pasa por CLI ────────────────────────
+        if modo:
+            os.environ["TRAINING_MODE"] = modo.lower()
+            settings.ensure_directories()   # reconstruye TRAINING_CONFIGURE
+
+        modo_activo = os.getenv("TRAINING_MODE", "prod").upper()
+
         logger.info("="*70)
-        logger.info("2. ENTRENAMIENTO DE MODELOS")
+        logger.info(f"2. ENTRENAMIENTO DE MODELOS  [modo: {modo_activo}]")
         logger.info("="*70)
-        
+
         print(f"\n{'='*70}")
-        print("2. ENTRENAMIENTO DE MODELOS CON FEATURES AVANZADAS + Genetica IA")
+        print(f"2. ENTRENAMIENTO DE MODELOS  [modo: {modo_activo}]")
         print('='*70)
 
         # ── Sincronizar con Neon antes de entrenar ──────────────────
@@ -350,6 +358,14 @@ def crear_parser() -> argparse.ArgumentParser:
         type=str,
         help='Filtro de lotería (ej: astro, luna, sol)'
     )
+
+    parser.add_argument(
+        '--modo',
+        type=str,
+        choices=['test', 'prod'],
+        help='Modo de entrenamiento: test (rápido) o prod (completo). '
+             'Sobreescribe TRAINING_MODE del .env'
+    )
     
     parser.add_argument(
         '--config',
@@ -368,15 +384,20 @@ def crear_parser() -> argparse.ArgumentParser:
 
 def mostrar_configuracion() -> None:
     """Muestra la configuración actual del sistema."""
+    profile = settings.get_training_profile()
     print("\n⚙️  CONFIGURACIÓN ACTUAL")
     print("="*50)
     print(f"API URL:        {settings.API_URL}")
     print(f"Lotería:        {settings.FIND_LOTERY}")
-    print(f"Iteraciones:    {settings.TRAINING_CONFIGURE['max_iterations']}")
-    print(f"Min Accuracy:   {settings.TRAINING_CONFIGURE['min_accuracy']}")
+    print(f"Modo entreno:   {settings.TRAINING_MODE.upper()}")
+    print(f"Iteraciones:    {profile['max_iter']}")
+    print(f"Min Accuracy:   {profile['min_accuracy']}")
+    print(f"n_estimators:   {profile['n_estimators']}")
+    print(f"max_depth:      {profile['max_depth']}")
+    print(f"test_size:      {profile['test_size']}")
+    print(f"min_records:    {profile['min_records']}")
     print(f"Dir Modelos:    {settings.MODELS_DIR}")
     print(f"Dir Datos:      {settings.DATA_DIR}")
-    print(f"Dir Logs:       {settings.LOGS_DIR}")
     print(f"Database URL:   {'configurado' if settings.DATABASE_URL else 'NO configurado'}")
     print("="*50)
 
@@ -408,7 +429,7 @@ def main() -> int:
             exito = ejecutar_actualizacion(filtro_loteria=args.lottery) and exito
         
         if args.entrenar:
-            exito = ejecutar_entrenamiento(loteria=args.lottery) and exito
+            exito = ejecutar_entrenamiento(loteria=args.lottery, modo=getattr(args, 'modo', None)) and exito
         
         if args.predecir:
             exito = ejecutar_prediccion(loteria=args.lottery) and exito

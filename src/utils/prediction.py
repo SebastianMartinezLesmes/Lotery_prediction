@@ -15,7 +15,6 @@ from src.features.feature_engineering import generar_features
 
 
 ARCHIVO_EXCEL = str(settings.get_excel_path())
-TIEMPOS_LOG = str(settings.LOGS_DIR / "tiempos.log")
 CARPETA_MODELOS = str(settings.MODELS_DIR)
 
 warnings.filterwarnings("ignore")
@@ -284,10 +283,6 @@ def predecir_para_loteria(df, loteria):
     )
 
     duracion = time.time() - inicio
-
-    with open(TIEMPOS_LOG, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.now()} | {loteria} | {duracion:.2f}s\n")
-
     print(f"⏱ Tiempo de predicción: {duracion:.2f}s")
 
 

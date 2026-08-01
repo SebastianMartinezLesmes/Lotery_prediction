@@ -21,7 +21,7 @@ from src.database.queries import (
     UPSERT_RESULT,
 )
 
-logger = LoggerManager.get_logger("lottery_repository", "log_loteria.log")
+logger = LoggerManager.get_logger("lottery_repository")
 
 # Columnas canónicas que retorna siempre el repositorio
 _COLUMNS = ["fecha", "lottery", "result", "series"]

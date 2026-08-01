@@ -15,18 +15,49 @@ class Settings:
     """Configuración global del sistema."""
 
     # ======================================================
-    # CONFIGURACIÓN DE IA
+    # MODO DE ENTRENAMIENTO
+    # test  → ejecución rápida, comprobación de funcionamiento
+    # prod  → entrenamiento realista, mejor parametrizado
     # ======================================================
 
-    TRAINING_CONFIGURE = {
-        "min_accuracy": 0.05,         # reemplaza TRAINING_MIN_ACCURACY
-        "iterations": 2,              # reemplaza ITERATIONS
-        "max_iterations": 5,         # reemplaza TRAINING_MAX_ITER
-        "max_training_logs": 3,       # reemplaza MAX_TRAINING_LOGS
-        "min_records": 50,            # reemplaza min_records del antiguo TRAINING_CONFIG
-        "training_verbose": True,     # reemplaza TRAINING_VERBOSE
-        "max_training_logs": 3      
+    TRAINING_MODE: str = os.getenv("TRAINING_MODE", "prod").lower()
+
+    # Perfiles por modo
+    _TRAINING_PROFILES: dict = {
+        "test": {
+            "min_accuracy":      0.01,        # umbral bajo para no bloquear
+            "max_iter":          2,            # solo 2 iteraciones
+            "n_estimators":      [20, 30],
+            "max_depth":         [3, 4],
+            "min_samples_split": [4],
+            "test_size":         0.3,
+            "min_records":       20,           # permite datos escasos
+            "verbose":           True,
+        },
+        "prod": {
+            "min_accuracy":      0.05,         # umbral realista
+            "max_iter":          30,           # 30 iteraciones de búsqueda
+            "n_estimators":      [100, 150, 200, 250, 300],
+            "max_depth":         [4, 5, 6, 8, None],
+            "min_samples_split": [2, 3, 5, 7],
+            "test_size":         0.2,
+            "min_records":       50,
+            "verbose":           True,
+        },
     }
+
+    @classmethod
+    def get_training_profile(cls) -> dict:
+        """Retorna el perfil de entrenamiento según TRAINING_MODE.
+        Lee os.environ en tiempo de ejecución para respetar cambios por CLI."""
+        mode = os.getenv("TRAINING_MODE", "prod").lower()
+        if mode not in cls._TRAINING_PROFILES:
+            print(f"⚠️  TRAINING_MODE='{mode}' desconocido. Usando 'prod'.")
+            mode = "prod"
+        return cls._TRAINING_PROFILES[mode]
+
+    # TRAINING_CONFIGURE se construye dinámicamente (ver ensure_directories)
+    TRAINING_CONFIGURE: dict = {}
 
 
     MODEL_TYPES = ["result", "series"]
@@ -111,7 +142,6 @@ class Settings:
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
     MODELS_DIR: Path = BASE_DIR / os.getenv("MODELS_DIR", "IA_models")
     DATA_DIR: Path = BASE_DIR / os.getenv("DATA_DIR", "data")
-    LOGS_DIR: Path = BASE_DIR / os.getenv("LOGS_DIR", "logs")
 
     # ======================================================
     # API CONFIG
@@ -225,10 +255,20 @@ class Settings:
 
     @classmethod
     def ensure_directories(cls) -> None:
-        """Crea los directorios necesarios si no existen."""
+        """Crea los directorios necesarios y construye TRAINING_CONFIGURE."""
         cls.MODELS_DIR.mkdir(parents=True, exist_ok=True)
         cls.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        cls.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        # Construir TRAINING_CONFIGURE desde el perfil activo
+        profile = cls.get_training_profile()
+        cls.TRAINING_CONFIGURE = {
+            "min_accuracy":    profile["min_accuracy"],
+            "max_iterations":  profile["max_iter"],
+            "min_records":     profile["min_records"],
+            "training_verbose": profile["verbose"],
+            # legacy keys usadas en código existente
+            "iterations":      profile["max_iter"],
+            "max_training_logs": 3,
+        }
 
 
 # Instancia global

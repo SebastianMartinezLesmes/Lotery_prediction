@@ -16,7 +16,7 @@ from src.core.logger import LoggerManager
 from src.database.repository import LotteriaRepository
 from src.database.connection import NeonConnection
 
-logger = LoggerManager.get_logger("neon_sync", "log_loteria.log")
+logger = LoggerManager.get_logger("neon_sync")
 
 # Loterías disponibles en SuperAstro
 LOTERIAS_DISPONIBLES = ["ASTRO SOL", "ASTRO LUNA"]

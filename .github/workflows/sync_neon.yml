@@ -1,9 +1,9 @@
-name: Sincronizar Neon
+name: Auto_Neon_Sync
 
 on:
   schedule:
-    # Cada 3 días a las 6:00 UTC (días 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31)
-    - cron: '0 6 */3 * *'
+    # Cada 3 días a las 12:00 UTC (días 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31)
+    - cron: '0 12 */3 * *'
   workflow_dispatch:        # Ejecución manual desde la UI de GitHub
     inputs:
       filtro_loteria:
