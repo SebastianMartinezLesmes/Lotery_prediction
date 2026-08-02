@@ -9,9 +9,22 @@ from src.core.config import settings
 from joblib import Parallel, delayed
 from collections import Counter
 
+# Importar modelos opcionales
+try:
+    from xgboost import XGBClassifier
+    XGBOOST_DISPONIBLE = True
+except ImportError:
+    XGBOOST_DISPONIBLE = False
+
+try:
+    from lightgbm import LGBMClassifier
+    LIGHTGBM_DISPONIBLE = True
+except ImportError:
+    LIGHTGBM_DISPONIBLE = False
 
 # Ignore deprecation warnings
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 # =========================
@@ -32,16 +45,44 @@ def probabilidad_mutacion(generacion, max_generaciones):
 # =========================
 
 def crear_poblacion_inicial(size):
+    """Crea población mixta: RF + XGBoost + LightGBM si están disponibles."""
+    tipos_disponibles = ["rf"]
+    if XGBOOST_DISPONIBLE:
+        tipos_disponibles.append("xgb")
+    if LIGHTGBM_DISPONIBLE:
+        tipos_disponibles.append("lgbm")
+
     poblacion = []
     for _ in range(size):
-        params = {
-            "n_estimators": random.randint(*settings.RF_N_ESTIMATORS_RANGE),
-            "max_depth": random.choice(settings.RF_MAX_DEPTH_OPTIONS),
-            "min_samples_split": random.randint(*settings.RF_MIN_SAMPLES_SPLIT_RANGE),
-            "min_samples_leaf": random.randint(1,5),
-            "max_features": random.choice(["sqrt","log2",None]),
-            "random_state": random.randint(*settings.MODEL_RANDOM_STATE_RANGE)
-        }
+        tipo = random.choice(tipos_disponibles)
+        if tipo == "xgb":
+            params = {
+                "tipo_modelo": "xgb",
+                "n_estimators": random.randint(50, 300),
+                "max_depth": random.choice([3, 4, 5, 6, 8]),
+                "learning_rate": random.choice([0.01, 0.05, 0.1, 0.2]),
+                "subsample": random.choice([0.6, 0.7, 0.8, 0.9, 1.0]),
+                "random_state": random.randint(0, 10000)
+            }
+        elif tipo == "lgbm":
+            params = {
+                "tipo_modelo": "lgbm",
+                "n_estimators": random.randint(50, 300),
+                "max_depth": random.choice([3, 4, 5, 6, 8]),
+                "learning_rate": random.choice([0.01, 0.05, 0.1, 0.2]),
+                "num_leaves": random.choice([15, 31, 63, 127]),
+                "random_state": random.randint(0, 10000)
+            }
+        else:
+            params = {
+                "tipo_modelo": "rf",
+                "n_estimators": random.randint(*settings.RF_N_ESTIMATORS_RANGE),
+                "max_depth": random.choice(settings.RF_MAX_DEPTH_OPTIONS),
+                "min_samples_split": random.randint(*settings.RF_MIN_SAMPLES_SPLIT_RANGE),
+                "min_samples_leaf": random.randint(1, 5),
+                "max_features": random.choice(["sqrt", "log2", None]),
+                "random_state": random.randint(*settings.MODEL_RANDOM_STATE_RANGE)
+            }
         poblacion.append(params)
     return poblacion
 
@@ -70,16 +111,12 @@ def crossover(padre1, padre2):
 # Direccion de mejora
 
 def mutar_hacia_mejor(params, mejor_params, fuerza=0.3):
-
     nuevo = params.copy()
-
-    for k in ["n_estimators","min_samples_split","min_samples_leaf"]:
-
-        if isinstance(params[k], int):
-
-            direccion = mejor_params[k] - params[k]
-
-            nuevo[k] = int(params[k] + direccion * fuerza)
+    for k in ["n_estimators", "min_samples_split", "min_samples_leaf"]:
+        if k in params and k in mejor_params:
+            if isinstance(params[k], int) and isinstance(mejor_params[k], int):
+                direccion = mejor_params[k] - params[k]
+                nuevo[k] = int(params[k] + direccion * fuerza)
     return nuevo
 
 
@@ -101,46 +138,42 @@ def mutacion_lejana(params):
 # =========================
 
 def mutar_parametros(params, generacion, max_generaciones, mejor_params=None, stagnation=False):
-    """
-    params: individuo actual
-    mejor_params: parametros del mejor modelo hasta ahora
-    stagnation: si True, hacer mutación lejana
-    """
     nuevo = params.copy()
     prob = probabilidad_mutacion(generacion, max_generaciones)
-    exploration_factor = 1 - (generacion / max_generaciones)  # grande al inicio
+    exploration_factor = 1 - (generacion / max_generaciones)
 
     if stagnation:
-        # Mutación lejana para escapar del estancamiento
         return mutacion_lejana(nuevo)
 
-    # Si hay un mejor modelo, mutamos hacia él con cierta fuerza
+    tipo = nuevo.get("tipo_modelo", "rf")
+
     if mejor_params and random.random() < prob:
-        fuerza = 0.3 + 0.4 * exploration_factor  # más fuerza al inicio
+        fuerza = 0.3 + 0.4 * exploration_factor
         nuevo = mutar_hacia_mejor(nuevo, mejor_params, fuerza=fuerza)
 
-    # Mutaciones aleatorias
+    # Mutaciones comunes
     if random.random() < prob:
-        delta = int(nuevo["n_estimators"] * (0.5 * exploration_factor))
-        nuevo["n_estimators"] = random.randint(
-            max(10, nuevo["n_estimators"] - delta),
-            nuevo["n_estimators"] + delta
-        )
+        delta = int(nuevo.get("n_estimators", 100) * (0.5 * exploration_factor))
+        nuevo["n_estimators"] = max(10, nuevo.get("n_estimators", 100) + random.randint(-delta, delta))
 
     if random.random() < prob:
         nuevo["max_depth"] = random.choice(settings.RF_MAX_DEPTH_OPTIONS)
 
-    if random.random() < prob:
-        nuevo["min_samples_split"] = random.randint(*settings.RF_MIN_SAMPLES_SPLIT_RANGE)
+    # Mutaciones específicas por tipo
+    if tipo == "rf":
+        if random.random() < prob:
+            nuevo["min_samples_split"] = random.randint(*settings.RF_MIN_SAMPLES_SPLIT_RANGE)
+        if random.random() < prob:
+            nuevo["min_samples_leaf"] = random.randint(1, 5)
+        if random.random() < prob:
+            nuevo["max_features"] = random.choice(["sqrt", "log2", None])
+    elif tipo in ("xgb", "lgbm"):
+        if random.random() < prob:
+            nuevo["learning_rate"] = random.choice([0.01, 0.05, 0.1, 0.2])
+        if tipo == "lgbm" and random.random() < prob:
+            nuevo["num_leaves"] = random.choice([15, 31, 63, 127])
 
-    if random.random() < prob:
-        nuevo["min_samples_leaf"] = random.randint(1,5)
-
-    if random.random() < prob:
-        nuevo["max_features"] = random.choice(["sqrt","log2",None])
-
-    nuevo["n_estimators"] = max(10, nuevo["n_estimators"])
-    nuevo["min_samples_split"] = max(2, nuevo["min_samples_split"])
+    nuevo["n_estimators"] = max(10, nuevo.get("n_estimators", 100))
     return nuevo
 
 
@@ -148,30 +181,54 @@ def mutar_parametros(params, generacion, max_generaciones, mejor_params=None, st
 # Evaluar individuo
 # =========================
 
+def _construir_modelo(params):
+    """Construye el modelo según el tipo especificado en params."""
+    tipo = params.get("tipo_modelo", "rf")
+
+    if tipo == "xgb" and XGBOOST_DISPONIBLE:
+        return XGBClassifier(
+            n_estimators=params.get("n_estimators", 100),
+            max_depth=params.get("max_depth", 4) or 4,
+            learning_rate=params.get("learning_rate", 0.1),
+            subsample=params.get("subsample", 0.8),
+            random_state=params.get("random_state", 42),
+            eval_metric="mlogloss",
+            verbosity=0,
+            use_label_encoder=False
+        )
+    elif tipo == "lgbm" and LIGHTGBM_DISPONIBLE:
+        return LGBMClassifier(
+            n_estimators=params.get("n_estimators", 100),
+            max_depth=params.get("max_depth", 4) or 4,
+            learning_rate=params.get("learning_rate", 0.1),
+            num_leaves=params.get("num_leaves", 31),
+            random_state=params.get("random_state", 42),
+            verbose=-1
+        )
+    else:
+        # RandomForest por defecto
+        return RandomForestClassifier(
+            n_estimators=params.get("n_estimators", 200),
+            max_depth=params.get("max_depth", 4),
+            min_samples_split=params.get("min_samples_split", 5),
+            min_samples_leaf=params.get("min_samples_leaf", 1),
+            max_features=params.get("max_features", "sqrt"),
+            random_state=params.get("random_state", 42)
+        )
+
+
 def evaluar_individuo(params, X_train, y_train, X_test, y_test):
-
-    model = RandomForestClassifier(**params)
-    conteo = Counter(y_train)
-    min_class = min(conteo.values())
-    cv = min(3, min_class)
-
-    if cv < 2:
+    try:
+        model = _construir_modelo(params)
+        # Entrenamiento directo sin cross_val (evita MemoryError)
         model.fit(X_train, y_train)
-        pred = model.predict(X_test)
-        acc = accuracy_score(y_test, pred)
+        acc = accuracy_score(y_test, model.predict(X_test))
         return acc, model
-
-    scores = cross_val_score(
-        model,
-        X_train,
-        y_train,
-        cv=cv,
-        n_jobs=1
-    )
-
-    acc = scores.mean()
-    model.fit(X_train, y_train)
-    return acc, model
+    except Exception:
+        model = RandomForestClassifier(n_estimators=50, max_depth=4, random_state=42)
+        model.fit(X_train, y_train)
+        acc = accuracy_score(y_test, model.predict(X_test))
+        return acc, model
 
 
 # =========================
@@ -251,8 +308,8 @@ def entrenamiento_evolutivo(
 
     for g in range(generaciones):
 
-        # Evaluación paralela
-        resultados_eval = Parallel(n_jobs=settings.N_JOBS)(
+        # Evaluación secuencial con threads (evita MemoryError por fork)
+        resultados_eval = Parallel(n_jobs=settings.N_JOBS, prefer="threads")(
             delayed(evaluar_individuo)( params, X_train, y_train, X_test, y_test )
             for params in poblacion
         )

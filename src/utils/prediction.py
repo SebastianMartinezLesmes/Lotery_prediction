@@ -10,13 +10,11 @@ from pathlib import Path
 from datetime import datetime
 from openpyxl import load_workbook
 from src.core.config import settings
-from src.utils.training import entrenar_modelos_por_loteria
-from src.excel.read_excel import obtener_loterias_disponibles
+from src.utils.training_simple import entrenar_modelos_por_loteria
 from src.features.feature_engineering import generar_features
 
 
 ARCHIVO_EXCEL = str(settings.get_excel_path())
-TIEMPOS_LOG = str(settings.LOGS_DIR / "tiempos.log")
 CARPETA_MODELOS = str(settings.MODELS_DIR)
 
 warnings.filterwarnings("ignore")
@@ -135,12 +133,10 @@ def cargar_datos_excel():
 
 def preparar_datos(df, loteria):
     """Prepara datos para una lotería específica."""
-    df = df[df["lottery"].str.upper() == loteria.upper()]
+    df = df[df["lottery"].str.upper() == loteria.upper()].copy()
     df = df.sort_values("fecha")
-    df["dia"] = df["fecha"].dt.day
-    df["mes"] = df["fecha"].dt.month
-    df["anio"] = df["fecha"].dt.year
-    df["dia_semana"] = df["fecha"].dt.weekday
+    # Garantizar que fecha sea datetime (viene como date desde Neon)
+    df["fecha"] = pd.to_datetime(df["fecha"])
     return df
 
 
@@ -161,20 +157,19 @@ def predecir_para_loteria(df, loteria):
     result_path, result_payload, result_score = buscar_mejor_modelo(loteria, "result")
     series_path, series_payload, series_score = buscar_mejor_modelo(loteria, "series")
 
-    reentrenar = False
+    if not (result_path and series_path):
+        print(
+            f"\n❌ No se encontraron modelos entrenados para '{loteria}'.\n"
+            f"   Ejecuta primero: python main.py --entrenar --lottery \"{loteria}\"\n"
+            f"   No se puede predecir sin modelos previos."
+        )
+        return
 
-    if result_path and series_path:
+    modelo_result = result_payload["model"]
+    modelo_series = series_payload["model"]
 
-        modelo_result = result_payload["model"]
-        modelo_series = series_payload["model"]
-
-        print(f"✓ Mejor modelo RESULT: {result_path.name} | Accuracy={result_score:.4f}")
-        print(f"✓ Mejor modelo SERIES: {series_path.name} | Accuracy={series_score:.4f}")
-
-    else:
-
-        print(f"📚 No se encontraron modelos para {loteria}, entrenando...")
-        reentrenar = True
+    print(f"✓ Mejor modelo RESULT: {result_path.name} | Accuracy={result_score:.4f}")
+    print(f"✓ Mejor modelo SERIES: {series_path.name} | Accuracy={series_score:.4f}")
 
     # =========================
     # GENERAR FEATURES
@@ -196,22 +191,6 @@ def predecir_para_loteria(df, loteria):
     )
 
     # =========================
-    # ENTRENAR SI NO HAY MODELO
-    # =========================
-
-    if reentrenar:
-
-        modelo_result, modelo_series = entrenar_modelos_por_loteria(
-            X_train,
-            y_result,
-            y_series,
-            loteria,
-            min_acc=settings.TRAINING_CONFIGURE["min_accuracy"],
-            max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
-            verbose=True
-        )
-
-    # =========================
     # FEATURES PARA PREDICCION
     # =========================
 
@@ -225,35 +204,53 @@ def predecir_para_loteria(df, loteria):
             )
 
     # =========================
-    # PREDICCION NUMERO
+    # PREDICCION NUMERO + SIGNO (Paso 6: top 3 con confianza)
     # =========================
 
-    if hasattr(modelo_result, "predict_proba"):
+    # Verificar compatibilidad de features
+    if hasattr(modelo_result, "n_features_in_"):
+        if features.shape[1] != modelo_result.n_features_in_:
+            raise ValueError(
+                f"El modelo espera {modelo_result.n_features_in_} features "
+                f"pero recibió {features.shape[1]}"
+            )
 
-        pred_probs = modelo_result.predict_proba(features)[0]
+    # Modelo compuesto (4 dígitos) o modelo clásico
+    from src.utils.training_simple import _ModeloCompuesto
 
-        idx = np.argmax(pred_probs)
-
-        pred_result = modelo_result.classes_[idx]
-        confianza = float(pred_probs[idx])
-
+    if isinstance(modelo_result, _ModeloCompuesto):
+        top3_numeros = modelo_result.top3_numeros(features)
+        pred_result  = top3_numeros[0][0]
+        confianza    = top3_numeros[0][1]
+    elif hasattr(modelo_result, "predict_proba"):
+        pred_probs_result = modelo_result.predict_proba(features)[0]
+        top3_idx     = np.argsort(pred_probs_result)[-3:][::-1]
+        top3_numeros = [(int(modelo_result.classes_[i]), float(pred_probs_result[i])) for i in top3_idx]
+        pred_result  = top3_numeros[0][0]
+        confianza    = top3_numeros[0][1]
     else:
+        pred_result  = int(modelo_result.predict(features)[0])
+        top3_numeros = [(pred_result, None)]
+        confianza    = None
 
-        pred_result = modelo_result.predict(features)[0]
-        confianza = None
-
-    # =========================
-    # PREDICCION SIGNO
-    # =========================
-
-    pred_series = modelo_series.predict(features)[0]
+    # Series / signo
+    if hasattr(modelo_series, "predict_proba"):
+        pred_probs_series = modelo_series.predict_proba(features)[0]
+        top3_series_idx   = np.argsort(pred_probs_series)[-3:][::-1]
+        top3_signos  = [(obtener_zodiaco(modelo_series.classes_[i]), float(pred_probs_series[i])) for i in top3_series_idx]
+        pred_series  = modelo_series.classes_[top3_series_idx[0]]
+    else:
+        pred_series  = modelo_series.predict(features)[0]
+        top3_signos  = [(obtener_zodiaco(pred_series), None)]
 
     signo = obtener_zodiaco(pred_series)
 
     resultado_final = {
-        "loteria": loteria,
-        "numero": int(pred_result),
-        "serie": signo
+        "loteria":      loteria,
+        "numero":       int(pred_result),
+        "serie":        signo,
+        "top3_numeros": top3_numeros,
+        "top3_signos":  top3_signos,
     }
 
     # =========================
@@ -261,12 +258,19 @@ def predecir_para_loteria(df, loteria):
     # =========================
 
     print("\n🎯 PREDICCIÓN")
-    print(f"Lotería: {loteria}")
-    print(f"Número: {pred_result}")
-    print(f"Signo : {signo}")
+    print(f"  Lotería : {loteria}")
+    print(f"  Número  : {str(pred_result).zfill(4)}   Signo: {signo}")
 
-    if confianza:
-        print(f"Confianza modelo: {confianza:.2%}")
+    if confianza is not None:
+        print(f"\n  Top 3 números:")
+        for num, prob in top3_numeros:
+            bar = "█" * max(1, int((prob or 0) * 20))
+            print(f"    {str(num).zfill(4)}  {(prob or 0):6.2%}  {bar}")
+
+        print(f"\n  Top 3 signos:")
+        for sg, prob in top3_signos:
+            bar = "█" * max(1, int((prob or 0) * 20))
+            print(f"    {sg}  {(prob or 0):6.2%}  {bar}")
 
     guardar_resultado(
         resultado_final,
@@ -275,20 +279,62 @@ def predecir_para_loteria(df, loteria):
     )
 
     duracion = time.time() - inicio
-
-    with open(TIEMPOS_LOG, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.now()} | {loteria} | {duracion:.2f}s\n")
-
     print(f"⏱ Tiempo de predicción: {duracion:.2f}s")
 
 
 def main(filtro_loteria=None):
-    df = cargar_datos_excel()
-    if df.empty:
-        print("!! No se pudieron cargar datos del archivo.")
+    # ── Sincronizar con Neon antes de predecir ────────────────────
+    try:
+        from src.database.sync import synchronize_database
+        synchronize_database(filtro_loteria=filtro_loteria)
+    except Exception as e_sync:
+        print(f"⚠️  Sincronización con Neon falló (usando datos locales): {e_sync}")
+
+    # ── Cargar datos desde Neon ───────────────────────────────────
+    df = None
+    loterias = []
+
+    try:
+        from src.database.connection import NeonConnection
+        from src.database.repository import LotteriaRepository
+
+        conn = NeonConnection()
+        repository = LotteriaRepository(conn)
+
+        loterias_neon = ["ASTRO SOL", "ASTRO LUNA"]
+        if filtro_loteria:
+            loterias_neon = [l for l in loterias_neon if filtro_loteria.upper() in l.upper()]
+
+        frames = []
+        for lot in loterias_neon:
+            try:
+                df_lot = repository.get_all_results(lot)
+                if not df_lot.empty:
+                    frames.append(df_lot)
+                    loterias.append(lot)
+            except Exception as e_lot:
+                print(f"⚠️  No se pudo cargar {lot} desde Neon: {e_lot}")
+
+        if frames:
+            df = pd.concat(frames, ignore_index=True)
+            print(f"Datos cargados desde Neon PostgreSQL: {len(df)} registros")
+        conn.close()
+    except Exception as e_neon:
+        print(f"⚠️  Neon no disponible, usando fallback Excel: {e_neon}")
+
+    # ── Fallback a Excel ──────────────────────────────────────────
+    if df is None or df.empty:
+        df = cargar_datos_excel()
+        if df.empty:
+            print("!! No se pudieron cargar datos.")
+            return
+        # Obtener loterías desde el Excel
+        loterias = sorted(df["lottery"].dropna().unique().tolist())
+
+    if not loterias:
+        print("!! No se encontraron loterías disponibles.")
         return
 
-    loterias = obtener_loterias_disponibles()
     print(f"\nLoterías detectadas: {loterias}")
     if filtro_loteria:
         loterias = [l for l in loterias if filtro_loteria.lower() in l.lower()]
