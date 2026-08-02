@@ -38,15 +38,20 @@ class Settings:
         },
         "prod": {
             "min_accuracy":      0.05,
-            "max_iter":          60,     # iteraciones totales
-            "n_estimators":      [100, 150, 200, 250, 300],
-            "max_depth":         [4, 5, 6, 8, None],
-            "min_samples_split": [2, 3, 5, 7],
             "test_size":         0.2,
             "min_records":       50,
             "verbose":           True,
             "n_jobs":            -1,     # usa todos los núcleos disponibles
-            "patience":          20,     # early stop si no mejora en 20 iter
+            # ── Espacio de búsqueda de hiperparámetros ──────────────────
+            "n_estimators":      [100, 150, 200, 250, 300],
+            "max_depth":         [4, 5, 6, 8, None],
+            "min_samples_split": [2, 3, 5, 7],
+            # ── Parámetros del algoritmo genético ───────────────────────
+            "generaciones":      15,     # número de generaciones
+            "poblacion":         8,      # individuos por generación
+            "elite":             2,      # cuántos pasan directos a la siguiente gen
+            "prob_mutacion":     0.3,    # probabilidad de mutar cada gen
+            "patience":          5,      # early stop si no mejora en N generaciones
         },
     }
 
@@ -266,11 +271,13 @@ class Settings:
         profile = cls.get_training_profile()
         cls.TRAINING_CONFIGURE = {
             "min_accuracy":    profile["min_accuracy"],
-            "max_iterations":  profile["max_iter"],
+            # max_iterations: en modo genético = generaciones × poblacion
+            "max_iterations":  profile.get("generaciones", profile.get("max_iter", 10))
+                               * profile.get("poblacion", 1),
             "min_records":     profile["min_records"],
             "training_verbose": profile["verbose"],
-            # legacy keys usadas en código existente
-            "iterations":      profile["max_iter"],
+            # legacy keys
+            "iterations":      profile.get("max_iter", profile.get("generaciones", 10)),
             "max_training_logs": 3,
         }
 
