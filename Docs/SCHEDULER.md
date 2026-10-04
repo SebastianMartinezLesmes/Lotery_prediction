@@ -138,3 +138,53 @@ python scripts/scheduler.py
 Para producción en servidor propio se recomienda usar GitHub Actions
 en vez del scheduler local — es más simple, no requiere un proceso
 corriendo 24/7 y tiene logs integrados.
+
+---
+
+## Keep-alive del repositorio
+
+### Problema
+
+GitHub desactiva automáticamente los workflows con `schedule` cuando el repositorio pasa **60 días sin actividad**. El workflow `Auto_Neon_Sync` se ejecuta cada 3 días pero **no hace commits**, por lo que su ejecución no cuenta como actividad para GitHub. Pasados 60 días sin un commit real, GitHub desactiva todos los workflows programados del repositorio.
+
+### Solución: workflow `Step_Alive_proyect`
+
+Archivo: `.github/workflows/step_alive_proyect.yml`
+
+Este workflow hace un commit mínimo (sin valor funcional) cada ~25 días para que GitHub registre actividad real y mantenga activos todos los workflows.
+
+### Cron
+
+```
+0 3 1,26 * *
+```
+
+Se ejecuta los **días 1 y 26** de cada mes a las 03:00 UTC:
+
+- Intervalo máximo entre ejecuciones: **25 días** (del día 1 al 26).
+- Del 26 al 1 del mes siguiente son 5–6 días.
+- Siempre queda muy por debajo del límite de 60 días, incluso si falla una ejecución.
+
+> **Nota:** `*/25` en el campo día-del-mes **no** significa "cada 25 días" — significa los días 1 y 26 pero reinicia cada mes de forma irregular. Por eso se usan días explícitos `1,26`.
+
+### Archivo modificado
+
+`.github/keepalive/last_alive.txt` — contiene únicamente el timestamp UTC de la última ejecución en formato ISO-8601 (ej. `2026-10-04T04:01:45Z`). Es el único archivo que modifica este workflow.
+
+### Características
+
+| Propiedad | Valor |
+|-----------|-------|
+| Trigger automático | `0 3 1,26 * *` (días 1 y 26 de cada mes) |
+| Trigger manual | `workflow_dispatch` disponible |
+| Permiso requerido | `contents: write` (solo `GITHUB_TOKEN`, sin secretos extra) |
+| Mensaje de commit | `chore: keep-alive <timestamp> [skip ci]` |
+| Autor del commit | `github-actions[bot]` |
+| Archivos tocados | Solo `.github/keepalive/last_alive.txt` |
+
+### Consideraciones
+
+- Genera ~1–2 commits por mes en `master`. Es el costo aceptado de esta estrategia.
+- El `[skip ci]` en el mensaje evita que el propio commit dispare otros workflows con costes de cómputo.
+- Si `master` tiene branch protection que bloquea pushes directos del bot, se debe permitir que `github-actions[bot]` omita la regla (o usar un PAT, fuera del alcance actual).
+- En GitHub → Settings → Actions → General → Workflow permissions debe estar habilitado "Read and write permissions".
