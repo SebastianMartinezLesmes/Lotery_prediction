@@ -103,6 +103,7 @@ def guardar_modelo_si_mejora(
             "algoritmo":      tipo_algo,
             "n_features":     getattr(modelo, "n_features_in_", len(FEATURE_COLUMNS)),
             "feature_names":  FEATURE_COLUMNS,
+            "sign_mapping":   {i: s for i, s in enumerate(settings.SIGNOS)},
             "n_records":      n_records,
             "loteria":        nombre_loteria,
             "tipo_modelo":    tipo_modelo,

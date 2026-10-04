@@ -56,10 +56,17 @@ class Settings:
     }
 
     @classmethod
-    def get_training_profile(cls) -> dict:
+    def get_training_profile(cls, mode: str = None) -> dict:
         """Retorna el perfil de entrenamiento según TRAINING_MODE.
-        Lee os.environ en tiempo de ejecución para respetar cambios por CLI."""
-        mode = os.getenv("TRAINING_MODE", "prod").lower()
+        Lee os.environ en tiempo de ejecución para respetar cambios por CLI.
+        
+        Args:
+            mode: Modo explícito ('test' o 'prod'). Si no se proporciona, usa
+                  la variable de entorno TRAINING_MODE (por defecto 'prod').
+        """
+        if mode is None:
+            mode = os.getenv("TRAINING_MODE", "prod")
+        mode = mode.lower()
         if mode not in cls._TRAINING_PROFILES:
             print(f"⚠️  TRAINING_MODE='{mode}' desconocido. Usando 'prod'.")
             mode = "prod"
@@ -187,6 +194,9 @@ class Settings:
     # ======================================================
     # LOTTERY CONFIG
     # ======================================================
+
+    SIGNOS: list = ['ARI', 'TAU', 'GEM', 'CAN', 'LEO', 'VIR', 'LIB', 'ESC', 'SAG', 'CAP', 'ACU', 'PIS']
+    LOTTERIES: list = ['ASTRO SOL', 'ASTRO LUNA']
 
 
 #-------------------------------------------------------------------------------------------------------

@@ -26,7 +26,6 @@ import numpy as np
 import joblib as jl
 
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
 from src.utils.save_training import guardar_modelo_si_mejora, crear_base_modelos_IA
@@ -108,15 +107,14 @@ def _evaluar_individuo(individuo, test_size,
     depth = individuo["max_depth"]
     split = individuo["min_samples_split"]
 
-    X_tr, X_te, \
-    ym_tr, ym_te, \
-    yc_tr, yc_te, \
-    yd_tr, yd_te, \
-    yu_tr, yu_te, \
-    ys_tr, ys_te = train_test_split(
-        X, y_miles, y_centenas, y_decenas, y_unidades, y_series,
-        test_size=test_size, random_state=seed,
-    )
+    n = len(X)
+    split_idx = int(n * (1 - test_size))
+    X_tr, X_te       = X[:split_idx], X[split_idx:]
+    ym_tr, ym_te     = y_miles[:split_idx], y_miles[split_idx:]
+    yc_tr, yc_te     = y_centenas[:split_idx], y_centenas[split_idx:]
+    yd_tr, yd_te     = y_decenas[:split_idx], y_decenas[split_idx:]
+    yu_tr, yu_te     = y_unidades[:split_idx], y_unidades[split_idx:]
+    ys_tr, ys_te     = y_series[:split_idx], y_series[split_idx:]
 
     m_m, acc_m = _entrenar_rf(X_tr, ym_tr, X_te, ym_te, n_est, depth, seed, split)
     m_c, acc_c = _entrenar_rf(X_tr, yc_tr, X_te, yc_te, n_est, depth, seed, split)
@@ -445,6 +443,14 @@ def entrenar_modelos_por_loteria(
     if verbose:
         print(f"\n  Mejor result acc : {mejor_acc_result:.4f}")
         print(f"  Mejor series acc : {mejor_acc_series:.4f}")
+
+    # ── Baseline accuracy ─────────────────────────────────────────────────
+    from collections import Counter
+    baseline_result = max(Counter(y_result % 10).values()) / len(y_result)
+    baseline_series = max(Counter(y_series).values()) / len(y_series)
+    if verbose:
+        print(f"  Modelo result: {mejor_acc_result:.2%} | Línea base: {baseline_result:.2%}")
+        print(f"  Modelo series: {mejor_acc_series:.2%} | Línea base: {baseline_series:.2%}")
 
     # ── Guardar en memoria IA ─────────────────────────────────────────────
     print("\n🧠 Guardando en memoria IA:")

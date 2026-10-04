@@ -6,6 +6,12 @@ sincronización automática contra Neon PostgreSQL.
 
 ---
 
+## ⚠️ Aviso importante
+
+Los modelos entrenados actualmente (`IA_models/`) cubren **solo ASTRO LUNA**. ASTRO SOL no tiene modelos generados todavía; ejecutar `--predecir` o `--entrenar` sin filtro intentará ambas loterías, pero solo ASTRO LUNA producirá resultados válidos.
+
+---
+
 ## Características
 
 - RandomForest con modelo compuesto por dígitos (4 dígitos × 10 clases c/u)
@@ -123,6 +129,8 @@ Sobre ASTRO LUNA (996 registros):
 | Azar puro (número exacto) | 0.11% |
 | Azar puro (signo) | 8.3% |
 
+> Nota: solo ASTRO LUNA tiene modelos entrenados. ASTRO SOL aún no dispone de modelos en `IA_models/`.
+
 ---
 
 ## Estructura del proyecto
@@ -175,6 +183,25 @@ Lotery_prediction/
 │       └── sync_neon.yml        # Auto_Neon_Sync
 │
 └── Docs/                        # Documentación técnica
+```
+
+---
+
+## Uso con Docker
+
+```bash
+# Construir la imagen
+docker build -t lotery-prediction .
+
+# Ejecutar el pipeline completo
+docker run --env-file .env lotery-prediction python main.py
+
+# Solo actualizar datos
+docker run --env-file .env lotery-prediction python main.py --actualizar
+
+# Levantar servicios con Docker Compose
+docker-compose up sync       # Sincronización incremental
+docker-compose up prediction # Predicción
 ```
 
 ---
