@@ -177,18 +177,16 @@ def predecir_para_loteria(df, loteria):
 
     X_train_df = generar_features(df_loteria)
 
-    df_loteria = df_loteria.tail(len(X_train_df))
+    # T7: align by index instead of tail()
+    df_loteria = df_loteria.loc[X_train_df.index]
 
     X_train = X_train_df.values
     y_result = df_loteria["result"].values
-    y_series = (
-        df_loteria["series"]
-        .astype(str)
-        .str.upper()
-        .astype("category")
-        .cat.codes
-        .values
-    )
+    # T8: fixed categories encoding
+    y_series = pd.Categorical(
+        df_loteria["series"].astype(str).str.upper(),
+        categories=settings.SIGNOS
+    ).codes.values
 
     # =========================
     # FEATURES PARA PREDICCION
@@ -299,26 +297,29 @@ def main(filtro_loteria=None):
         from src.database.repository import LotteriaRepository
 
         conn = NeonConnection()
-        repository = LotteriaRepository(conn)
+        try:
+            repository = LotteriaRepository(conn)
 
-        loterias_neon = ["ASTRO SOL", "ASTRO LUNA"]
-        if filtro_loteria:
-            loterias_neon = [l for l in loterias_neon if filtro_loteria.upper() in l.upper()]
+            # T12: use settings.LOTTERIES instead of hardcoded list
+            loterias_neon = list(settings.LOTTERIES)
+            if filtro_loteria:
+                loterias_neon = [l for l in loterias_neon if filtro_loteria.upper() in l.upper()]
 
-        frames = []
-        for lot in loterias_neon:
-            try:
-                df_lot = repository.get_all_results(lot)
-                if not df_lot.empty:
-                    frames.append(df_lot)
-                    loterias.append(lot)
-            except Exception as e_lot:
-                print(f"⚠️  No se pudo cargar {lot} desde Neon: {e_lot}")
+            frames = []
+            for lot in loterias_neon:
+                try:
+                    df_lot = repository.get_all_results(lot)
+                    if not df_lot.empty:
+                        frames.append(df_lot)
+                        loterias.append(lot)
+                except Exception as e_lot:
+                    print(f"⚠️  No se pudo cargar {lot} desde Neon: {e_lot}")
 
-        if frames:
-            df = pd.concat(frames, ignore_index=True)
-            print(f"Datos cargados desde Neon PostgreSQL: {len(df)} registros")
-        conn.close()
+            if frames:
+                df = pd.concat(frames, ignore_index=True)
+                print(f"Datos cargados desde Neon PostgreSQL: {len(df)} registros")
+        finally:
+            conn.close()
     except Exception as e_neon:
         print(f"⚠️  Neon no disponible, usando fallback Excel: {e_neon}")
 

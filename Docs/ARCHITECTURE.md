@@ -43,13 +43,13 @@ Lotery_prediction/
 │   │   ├── prediction.py        # Motor de predicción con top-3
 │   │   ├── save_training.py     # Guardado de modelos con metadata
 │   │   ├── alerts.py            # Sistema de alertas (consola + email opcional)
-│   │   ├── mutation.py          # Entrenamiento evolutivo (genético)
-│   │   ├── batch_prediction.py  # Predicción por lotes
-│   │   ├── training.py          # Entrenamiento completo (RF evolutivo)
-│   │   ├── training_visualizer.py  # Visualización del progreso
+│   │   ├── mutation.py          # Entrenamiento evolutivo (genético)  # presente — uso interno / legacy
+│   │   ├── batch_prediction.py  # Predicción por lotes                # presente — uso interno / legacy
+│   │   ├── training.py          # Entrenamiento completo (RF evolutivo) # presente — uso interno / legacy
+│   │   ├── training_visualizer.py  # Visualización del progreso       # presente — uso interno / legacy
 │   │   └── drop_cache.py        # Limpieza de __pycache__
 │   │
-│   └── excel/
+│   └── excel/                                                          # presente — uso interno / legacy
 │       ├── excel_updater.py     # Actualización del Excel local
 │       └── read_excel.py        # Lectura del Excel
 │
@@ -62,6 +62,7 @@ Lotery_prediction/
 │   ├── 2_astro_luna_result.pkl  # Slot 2 — modelo result ASTRO LUNA
 │   ├── 1_astro_luna_series.pkl  # Slot 1 — modelo series ASTRO LUNA
 │   └── 2_astro_luna_series.pkl  # Slot 2 — modelo series ASTRO LUNA
+│   # Solo existen modelos para ASTRO LUNA. ASTRO SOL aún no tiene modelos entrenados.
 │
 ├── scripts/
 │   ├── migrar_a_neon.py         # Migración inicial Excel → Neon
@@ -91,7 +92,7 @@ superastro.com.co
 SuperAstroScraper          ← 1 request por ejecución, parsea tabla HTML
       │
       ▼
-sincronizar_con_neon()     ← obtiene MAX(fecha) de Neon, filtra solo lo nuevo
+synchronize_database()     ← obtiene MAX(fecha) de Neon, filtra solo lo nuevo
       │
       ▼
 LotteriaRepository         ← upsert_results() — INSERT ON CONFLICT DO UPDATE
@@ -221,6 +222,8 @@ logger.error("Error ocurrido")
 ---
 
 ## Modelos guardados
+
+> **Nota:** Solo existen modelos para ASTRO LUNA. ASTRO SOL aún no tiene modelos entrenados en `IA_models/`.
 
 Cada modelo se guarda como un payload `dict` serializado con `joblib`:
 

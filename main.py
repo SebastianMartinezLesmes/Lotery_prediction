@@ -11,7 +11,6 @@ import pandas as pd
 from typing import Optional
 from src.core.config import settings
 from src.core.logger import get_main_logger
-from src.api.superastro_scraper import SuperAstroScraper
 from src.utils.drop_cache import main as drop_cache_main
 from src.utils.prediction import main as prediction_main
 from src.utils.training_simple import entrenar_modelos_por_loteria
@@ -19,16 +18,17 @@ from src.features.feature_engineering import generar_features
 
 logger = get_main_logger()
 
+def log_y_mostrar(msg: str) -> None:
+    """Emite el mensaje al logger y a stdout."""
+    logger.info(msg)
+    print(msg)
+
 def ejecutar_limpieza() -> bool:
     """4. Limpia archivos de caché de Python."""
     try:
-        logger.info("="*70)
-        logger.info("4. LIMPIEZA DE CACHE")
-        logger.info("="*70)
-        
-        print(f"\n{'='*70}")
-        print("4. LIMPIEZA DE CACHE")
-        print('='*70)
+        log_y_mostrar("="*70)
+        log_y_mostrar("4. LIMPIEZA DE CACHE")
+        log_y_mostrar("="*70)
         
         drop_cache_main()
         
@@ -48,18 +48,14 @@ def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
         filtro_loteria: Filtro para loterías (ej: "astro", "luna", "sol")
     """
     try:
-        logger.info("=" * 70)
-        logger.info("1. SINCRONIZACIÓN DE DATOS CON NEON POSTGRESQL")
-        logger.info("=" * 70)
-
-        print(f"\n{'='*70}")
-        print("1. SINCRONIZACIÓN DE DATOS CON NEON POSTGRESQL")
-        print('='*70)
-        print(f"Fuente: SuperAstro (sitio oficial)")
-        print(f"Destino: Neon PostgreSQL")
+        log_y_mostrar("=" * 70)
+        log_y_mostrar("1. SINCRONIZACIÓN DE DATOS CON NEON POSTGRESQL")
+        log_y_mostrar("=" * 70)
+        log_y_mostrar(f"Fuente: SuperAstro (sitio oficial)")
+        log_y_mostrar(f"Destino: Neon PostgreSQL")
         if filtro_loteria:
-            print(f"Filtro: {filtro_loteria}")
-        print('='*70)
+            log_y_mostrar(f"Filtro: {filtro_loteria}")
+        log_y_mostrar('='*70)
 
         from src.database.sync import synchronize_database
 
@@ -74,37 +70,34 @@ def ejecutar_actualizacion(filtro_loteria: Optional[str] = None) -> bool:
         return False
 
 
-def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = None) -> bool:
+def ejecutar_entrenamiento(
+    loteria: Optional[str] = None,
+    modo: Optional[str] = None,
+    sincronizar: bool = True,
+) -> bool:
     """
     2. Entrena modelos de ML con features avanzadas.
 
     Args:
         loteria: Nombre específico de lotería (opcional)
-        modo: 'test' o 'prod'. Sobreescribe TRAINING_MODE del .env si se pasa.
+        modo: 'test' o 'prod'. Si no se pasa, usa TRAINING_MODE del entorno.
+        sincronizar: Si True (default), sincroniza con Neon antes de entrenar.
     """
     try:
-        # ── Aplicar modo si se pasa por CLI ────────────────────────
-        if modo:
-            os.environ["TRAINING_MODE"] = modo.lower()
-            settings.ensure_directories()   # reconstruye TRAINING_CONFIGURE
+        modo_activo = (modo.lower() if modo else os.getenv('TRAINING_MODE', 'prod')).upper()
 
-        modo_activo = os.getenv("TRAINING_MODE", "prod").upper()
+        log_y_mostrar("="*70)
+        log_y_mostrar(f"2. ENTRENAMIENTO DE MODELOS  [modo: {modo_activo}]")
+        log_y_mostrar("="*70)
 
-        logger.info("="*70)
-        logger.info(f"2. ENTRENAMIENTO DE MODELOS  [modo: {modo_activo}]")
-        logger.info("="*70)
-
-        print(f"\n{'='*70}")
-        print(f"2. ENTRENAMIENTO DE MODELOS  [modo: {modo_activo}]")
-        print('='*70)
-
-        # ── Sincronizar con Neon antes de entrenar ──────────────────
-        try:
-            from src.database.sync import synchronize_database
-            logger.info("Sincronizando con Neon antes del entrenamiento...")
-            synchronize_database(filtro_loteria=loteria)
-        except Exception as e_sync:
-            logger.warning(f"Sincronización con Neon falló (se usará Excel): {e_sync}")
+        # ── Sincronizar con Neon antes de entrenar (si no viene del pipeline) ──
+        if sincronizar:
+            try:
+                from src.database.sync import synchronize_database
+                logger.info("Sincronizando con Neon antes del entrenamiento...")
+                synchronize_database(filtro_loteria=loteria)
+            except Exception as e_sync:
+                logger.warning(f"Sincronización con Neon falló (se usará Excel): {e_sync}")
 
         # ── Intentar cargar desde Neon ──────────────────────────────
         df = None
@@ -113,28 +106,29 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = 
             from src.database.repository import LotteriaRepository
 
             conn = NeonConnection()
-            repository = LotteriaRepository(conn)
+            try:
+                repository = LotteriaRepository(conn)
 
-            # Si hay filtro de lotería cargamos esa, si no cargamos todas
-            # Para obtener todas las loterías cargamos una a una
-            loterias_neon = ["ASTRO SOL", "ASTRO LUNA"]
-            if loteria:
-                loterias_neon = [l for l in loterias_neon if loteria.upper() in l.upper()]
+                # T12: use settings.LOTTERIES instead of hardcoded list
+                loterias_neon = list(settings.LOTTERIES)
+                if loteria:
+                    loterias_neon = [l for l in loterias_neon if loteria.upper() in l.upper()]
 
-            frames = []
-            for lot in loterias_neon:
-                try:
-                    df_lot = repository.get_all_results(lot)
-                    if not df_lot.empty:
-                        frames.append(df_lot)
-                except Exception as e_lot:
-                    logger.warning(f"No se pudo cargar {lot} desde Neon: {e_lot}")
+                frames = []
+                for lot in loterias_neon:
+                    try:
+                        df_lot = repository.get_all_results(lot)
+                        if not df_lot.empty:
+                            frames.append(df_lot)
+                    except Exception as e_lot:
+                        logger.warning(f"No se pudo cargar {lot} desde Neon: {e_lot}")
 
-            if frames:
-                df = pd.concat(frames, ignore_index=True)
-                logger.info(f"Datos cargados desde Neon: {len(df)} registros")
-                print(f"Leyendo datos desde: Neon PostgreSQL ({len(df)} registros)")
-            conn.close()
+                if frames:
+                    df = pd.concat(frames, ignore_index=True)
+                    logger.info(f"Datos cargados desde Neon: {len(df)} registros")
+                    print(f"Leyendo datos desde: Neon PostgreSQL ({len(df)} registros)")
+            finally:
+                conn.close()
         except Exception as e_neon:
             logger.warning(f"Fallo al cargar datos desde Neon, usando Excel: {e_neon}")
             df = None
@@ -148,61 +142,73 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = 
                 return False
             print(f"Leyendo datos desde: {ruta_excel} (fallback Excel)")
             df = pd.read_excel(ruta_excel)
-        
+
         # ── Validar columnas ────────────────────────────────────────
         columnas_necesarias = {"fecha", "lottery", "result", "series"}
         if not columnas_necesarias.issubset(df.columns):
             print(f"❌ Faltan columnas necesarias: {columnas_necesarias - set(df.columns)}")
             return False
-        
+
         # Preprocesar
         df = df.dropna(subset=["fecha", "lottery", "result", "series"])
         df["result"] = df["result"].astype(int)
         df["fecha"] = pd.to_datetime(df["fecha"], dayfirst=True)
-        df["series"] = df["series"].astype(str).str.upper().astype("category").cat.codes
-        
+        # T8: fixed categories encoding for series
+        df["series"] = pd.Categorical(
+            df["series"].astype(str).str.upper(),
+            categories=settings.SIGNOS
+        ).codes
+
         # Obtener loterías
         if loteria:
-            # Filtrar loterías que contengan el texto especificado
             loteria_lower = loteria.lower()
             loterias_disponibles = df["lottery"].unique()
             loterias = [l for l in loterias_disponibles if loteria_lower in l.lower()]
-            
+
             if not loterias:
                 print(f"❌ No se encontraron loterías que coincidan con: {loteria}")
                 print(f"   Loterías disponibles: {list(loterias_disponibles)}")
                 return False
         else:
             loterias = df["lottery"].unique()
-        
+
         print(f"\nLoterías a entrenar: {list(loterias)}")
         print(f"Features: Históricas (lags + rolling + frecuencia + días sin aparecer)")
         print('='*70)
-        
+
         # Entrenar cada lotería
         for nombre_loteria in loterias:
             print(f"\n{'='*70}")
             print(f"Entrenando modelos para: {nombre_loteria.upper()}")
             print('='*70)
-            
+
             df_loteria = df[df["lottery"].str.lower() == nombre_loteria.lower()].copy()
-            
+
             min_rec = settings.TRAINING_CONFIGURE["min_records"]
             if len(df_loteria) < min_rec:
                 print(f"❌ Datos insuficientes para {nombre_loteria}: {len(df_loteria)} registros")
                 print(f"   Se necesitan al menos {min_rec} registros")
                 continue
-            
+
             # Ordenar por fecha
             df_loteria = df_loteria.sort_values("fecha").reset_index(drop=True)
             df_loteria["fecha"] = pd.to_datetime(df_loteria["fecha"])
+
+            # T10: staleness check
+            ultima_fecha = df_loteria["fecha"].max()
+            dias = (pd.Timestamp.now() - ultima_fecha).days
+            if dias > 7:
+                logger.warning(
+                    f"{nombre_loteria}: datos desactualizados — "
+                    f"última fecha {ultima_fecha.date()} ({dias} días)"
+                )
 
             # Generar features históricas (sin calendario)
             X_df = generar_features(df_loteria)
             X_df = X_df.replace([np.inf, -np.inf], np.nan).dropna()
 
-            # Alinear target con las filas que sobrevivieron al dropna
-            df_loteria = df_loteria.tail(len(X_df))
+            # T7: align target by index instead of tail()
+            df_loteria = df_loteria.loc[X_df.index]
             X_l = X_df.values
             y_r = df_loteria["result"].values
             y_s = df_loteria["series"].values
@@ -212,7 +218,7 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = 
             print(f"  Registros : {X_l.shape[0]}")
             print(f"  Features  : {X_l.shape[1]}")
             print(f"  Features  : {', '.join(cols[:5])}... (+{len(cols)-5} más)")
-            
+
             entrenar_modelos_por_loteria(
                 X=X_l,
                 y_result=y_r,
@@ -222,12 +228,12 @@ def ejecutar_entrenamiento(loteria: Optional[str] = None, modo: Optional[str] = 
                 max_iter=settings.TRAINING_CONFIGURE["max_iterations"],
                 verbose=True
             )
-        
+
         print(f"\n{'='*70}")
         print("✅ Entrenamiento completado para todas las loterías")
         print('='*70)
         return True
-        
+
     except Exception as e:
         logger.error(f"Error en entrenamiento: {e}", exc_info=True)
         print(f"\n❌ Error: {e}")
@@ -244,13 +250,9 @@ def ejecutar_prediccion(loteria: Optional[str] = None) -> bool:
         loteria: Nombre específico de lotería (opcional)
     """
     try:
-        logger.info("="*70)
-        logger.info("3. GENERACIÓN DE PREDICCIONES")
-        logger.info("="*70)
-        
-        print(f"\n{'='*70}")
-        print("3. GENERACIÓN DE PREDICCIONES")
-        print('='*70)
+        log_y_mostrar("="*70)
+        log_y_mostrar("3. GENERACIÓN DE PREDICCIONES")
+        log_y_mostrar("="*70)
         
         prediction_main(loteria)
         print("\n✅ Predicciones generadas")
@@ -269,7 +271,7 @@ def ejecutar_pipeline_completo() -> bool:
     
     pasos = [
         ("1. Actualización de Datos", lambda: ejecutar_actualizacion()),
-        ("2. Entrenamiento de Modelos", lambda: ejecutar_entrenamiento()),
+        ("2. Entrenamiento de Modelos", lambda: ejecutar_entrenamiento(sincronizar=False)),
         ("3. Generación de Predicciones", lambda: ejecutar_prediccion()),
         ("4. Limpieza de Cache", lambda: ejecutar_limpieza())
     ]
@@ -370,7 +372,7 @@ def mostrar_configuracion() -> None:
     print("\n⚙️  CONFIGURACIÓN ACTUAL")
     print("="*50)
     print(f"API URL:        {settings.API_URL}")
-    print(f"Lotería:        {settings.FIND_LOTERY}")
+    print(f"Loterías:       {settings.LOTTERIES}")
     print(f"Modo entreno:   {settings.TRAINING_MODE.upper()}")
     print(f"Iteraciones:    {profile['max_iter']}")
     print(f"Min Accuracy:   {profile['min_accuracy']}")
