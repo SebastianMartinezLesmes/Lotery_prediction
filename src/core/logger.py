@@ -40,6 +40,11 @@ class LoggerManager:
         return logger
 
 
+def get_logger(name: str) -> logging.Logger:
+    """Convenience wrapper: returns a named logger via LoggerManager."""
+    return LoggerManager.get_logger(name)
+
+
 def get_main_logger() -> logging.Logger:
     return LoggerManager.get_logger("lottery_system")
 
