@@ -188,3 +188,53 @@ Se ejecuta los **días 1 y 26** de cada mes a las 03:00 UTC:
 - El `[skip ci]` en el mensaje evita que el propio commit dispare otros workflows con costes de cómputo.
 - Si `master` tiene branch protection que bloquea pushes directos del bot, se debe permitir que `github-actions[bot]` omita la regla (o usar un PAT, fuera del alcance actual).
 - En GitHub → Settings → Actions → General → Workflow permissions debe estar habilitado "Read and write permissions".
+
+---
+
+## Correcciones aplicadas (2026-10-03)
+
+### Causa raíz del desfase 2026-07-12 → 2026-10-03
+
+Se identificaron tres causas que hacían que el workflow quedara en verde aunque fallara:
+
+1. **Excepciones tragadas en `sync.py`**: el bucle `for loteria in loterias` capturaba
+   cualquier excepción, guardaba `-1` en métricas, y retornaba igualmente. El proceso
+   Python terminaba con `exit 0` aunque todas las loterías hubieran fallado.
+
+2. **Sin `set -euo pipefail` en el YAML**: el paso de bash ejecutaba Python con
+   `python -c "..."` sin activar `pipefail`, por lo que un fallo del proceso Python
+   no propagaba el código de salida al step de Actions. El `|| echo "0"` al final
+   del `grep` también enmascaraba cualquier error.
+
+3. **Interpolación del filtro dentro del string Python (inyección de texto)**:
+   el YAML usaba `'$FILTRO'` directamente dentro de un here-doc Python
+   (`python -c "... filtro_loteria='$FILTRO' ..."`), lo que permitía inyección
+   de código si el valor del filtro contenía comillas o saltos de línea.
+
+### Cambios aplicados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/database/sync.py` | Al final del bucle, lanza `RuntimeError` si alguna lotería tiene métrica `-1` |
+| `src/api/superastro_scraper.py` | `obtener_todos_resultados_pagina` lanza `APIError` en vez de retornar `[]` |
+| `scripts/sync_check.py` | Script nuevo: ejecuta sync, imprime tabla lotería/fecha, sale con `exit 1` si hay error |
+| `.github/workflows/sync_neon.yml` | Añade `set -euo pipefail`, pasa `FILTRO` por variable de entorno, elimina `|| echo "0"`, llama a `sync_check.py` |
+| `Docs/SCHEDULER.md` | Este documento |
+
+### Umbral de frescura: N = 3 días
+
+`scripts/sync_check.py` comprueba que `MAX(fecha)` de cada lotería sea ≥ `hoy - 3 días`.
+Si no lo es, el script termina con `exit 1`, lo que marca el step de Actions como fallido.
+Esto hace visible cualquier desfase mayor a 3 días en el panel de GitHub Actions.
+
+### Nota sobre el hueco 2026-07-12 → 2026-10-03
+
+El sitio `superastro.com.co/historico.php` solo publica el histórico disponible en su
+página en el momento de la consulta. Si el sitio no conserva resultados de más de ~30 días,
+los ~83 días perdidos pueden no ser recuperables de forma automática. Se recomienda:
+
+1. Verificar manualmente si el sitio muestra resultados anteriores al 2026-09-01.
+2. Si los muestra, ejecutar el workflow manualmente (`workflow_dispatch`) — el scraper
+   tomará todos los datos disponibles en la página y hará upsert en Neon.
+3. Si el sitio no los muestra, considerar fuentes alternativas de histórico o aceptar
+   el hueco como irrecuperable.

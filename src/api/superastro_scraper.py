@@ -113,6 +113,7 @@ class SuperAstroScraper:
         Obtiene TODOS los resultados disponibles en la página en un solo request.
         Mucho más eficiente que consultar fecha por fecha.
         """
+        from src.core.exceptions import APIError
         try:
             logger.info(f"Obteniendo todos los resultados de {loteria} (1 request)...")
             response = self.session.get(self.BASE_URL, timeout=settings.SCRAPER_REQUEST_TIMEOUT)
@@ -122,8 +123,8 @@ class SuperAstroScraper:
             logger.info(f"  ✓ {len(resultados)} resultados encontrados en la página")
             return resultados
         except Exception as e:
-            logger.error(f"Error obteniendo resultados: {e}")
-            return []
+            logger.error(f"Error obteniendo resultados de {loteria}: {e}")
+            raise APIError(f"Error obteniendo resultados de {loteria}: {e}") from e
 
     def obtener_resultados_fecha(
         self,
