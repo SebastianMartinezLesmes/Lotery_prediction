@@ -30,9 +30,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          key: ${{runner.os}}-pip-${{hashFiles('requirements.txt')}}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{runner.os}}-pip-
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
@@ -40,36 +40,31 @@ jobs:
       - name: Sincronizar Neon
         id: sync
         env:
-          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          DATABASE_URL: ${{secrets.NEON_DATABASE_URL}}
+          FILTRO: ${{github.event.inputs.filtro_loteria}}
         run: |
-          FILTRO="${{ github.event.inputs.filtro_loteria }}"
-          if [ -n "$FILTRO" ]; then
-            echo "Sincronizando con filtro: $FILTRO"
-            python -c "
-          from src.database.sync import synchronize_database
-          total = synchronize_database(filtro_loteria='$FILTRO')
-          print(f'TOTAL_REGISTROS={total}')
-          " | tee /tmp/sync_output.txt
-          else
-            echo "Sincronizando todas las loterías"
-            python -c "
-          from src.database.sync import synchronize_database
-          total = synchronize_database()
-          print(f'TOTAL_REGISTROS={total}')
-          " | tee /tmp/sync_output.txt
-          fi
-
-          # Extraer total para el resumen
-          TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | cut -d= -f2 || echo "0")
-          echo "total_registros=${TOTAL}" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          python scripts/sync_check.py | tee /tmp/sync_output.txt
+          TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | cut -d= -f2)
+          echo "total_registros=${TOTAL}" >> "$GITHUB_OUTPUT"
 
       - name: Resumen de ejecución
         if: always()
+        env:
+          DATABASE_URL: ${{secrets.NEON_DATABASE_URL}}
         run: |
-          echo "## 🎯 Sincronización Neon — $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Registros sincronizados | ${{ steps.sync.outputs.total_registros || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Filtro aplicado | ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 Sincronización Neon — $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Registros sincronizados | ${{steps.sync.outputs.total_registros || 'N/A'}} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Filtro aplicado | ${{github.event.inputs.filtro_loteria || 'Todas las loterías'}} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trigger | ${{github.event_name}} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Fechas máximas por lotería" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/sync_output.txt ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E '(ASTRO|Lotería|-----)' /tmp/sync_output.txt >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi

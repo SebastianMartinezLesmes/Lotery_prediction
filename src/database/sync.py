@@ -104,4 +104,11 @@ def synchronize_database(filtro_loteria: Optional[str] = None) -> int:
     except Exception:
         pass
 
+    # ── Propagar fallo si alguna lotería tuvo error ──────────────────
+    fallidas = [l for l, v in metricas.items() if v == -1]
+    if fallidas:
+        raise RuntimeError(
+            f"Sincronización falló para loterías: {fallidas}"
+        )
+
     return total_registros
