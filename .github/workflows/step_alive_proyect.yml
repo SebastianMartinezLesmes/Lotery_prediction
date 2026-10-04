@@ -1,0 +1,36 @@
+name: Step_Alive_proyect
+
+on:
+  schedule:
+    - cron: "0 3 1,26 * *"   # días 1 y 26 de cada mes, 03:00 UTC (máx. 25 días entre corridas)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: step-alive-proyect
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Actualizar marca de actividad
+        run: |
+          mkdir -p .github/keepalive
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/keepalive/last_alive.txt
+
+      - name: Commit y push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/keepalive/last_alive.txt
+          git commit -m "chore: keep-alive $(cat .github/keepalive/last_alive.txt) [skip ci]"
+          git push origin master
