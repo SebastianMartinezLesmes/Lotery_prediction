@@ -85,7 +85,7 @@ def guardar_modelo_si_mejora(
                 # Compatibilidad de feature_names: si no coincide, ignorar el modelo guardado
                 if existente.get("feature_names") != FEATURE_COLUMNS:
                     print(
-                        f"  ⚠ Modelo obsoleto ignorado (feature_names no coincide): "
+                        f"  [WARN] Modelo obsoleto ignorado (feature_names no coincide): "
                         f"{os.path.basename(modelo_path)}"
                     )
                     acc_existente = 0
@@ -122,7 +122,7 @@ def guardar_modelo_si_mejora(
         joblib.dump(payload, modelo_path)
 
         print(
-            f"  ✅ {os.path.basename(modelo_path)} actualizado "
+            f"  [OK] {os.path.basename(modelo_path)} actualizado "
             f"[{tipo_algo}] Acc={accuracy:.4f}"
             + (f" F1={f1_score:.4f}" if f1_score else "")
         )

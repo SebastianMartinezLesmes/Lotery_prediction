@@ -285,7 +285,7 @@ def entrenar_modelos_por_loteria(
                     mejor_acc_result    = acc
                     mejor_modelo_result = payload["model"]
                     if verbose:
-                        print(f"✓ Result previo  (baseline: {acc:.4f})")
+                        print(f"[ok] Result previo  (baseline: {acc:.4f})")
             except Exception:
                 pass
 
@@ -298,7 +298,7 @@ def entrenar_modelos_por_loteria(
                     mejor_acc_series    = acc
                     mejor_modelo_series = payload["model"]
                     if verbose:
-                        print(f"✓ Series previo  (baseline: {acc:.4f})")
+                        print(f"[ok] Series previo  (baseline: {acc:.4f})")
             except Exception:
                 pass
 
@@ -326,11 +326,11 @@ def entrenar_modelos_por_loteria(
                 mejor_acc_result    = res["fitness_result"]
                 mejor_modelo_result = _ModeloCompuesto(
                     res["m_m"], res["m_c"], res["m_d"], res["m_u"], X.shape[1])
-                marcas += " ★result"
+                marcas += " *result"
             if res["fitness_series"] > mejor_acc_series:
                 mejor_acc_series    = res["fitness_series"]
                 mejor_modelo_series = res["m_s"]
-                marcas += " ★series"
+                marcas += " *series"
             if verbose:
                 print(f"  [{intento}/{max_iter_test}] "
                       f"n_est={res['n_estimators']} "
@@ -405,13 +405,13 @@ def entrenar_modelos_por_loteria(
                 print(f"\n  Gen {gen}/{generaciones} "
                       f"| mejor_result={mejor_gen_result:.4f} "
                       f"| mejor_series={mejor_gen_series:.4f} "
-                      f"{'★' if hubo_mejora else ''}")
+                      f"{'*' if hubo_mejora else ''}")
                 for i, ind in enumerate(ordenada):
                     marcas = ""
                     if ind["fitness_result"] == mejor_acc_result:
-                        marcas += " ←best_result"
+                        marcas += " <-best_result"
                     if ind["fitness_series"] == mejor_acc_series:
-                        marcas += " ←best_series"
+                        marcas += " <-best_series"
                     print(f"    [{i+1}] n_est={ind['n_estimators']:<3} "
                           f"depth={str(ind['max_depth']):<4} "
                           f"split={ind['min_samples_split']} | "
@@ -426,7 +426,7 @@ def entrenar_modelos_por_loteria(
 
             if sin_mejora >= patience:
                 if verbose:
-                    print(f"\n  ⏹ Early stop: {sin_mejora} generaciones sin mejora global.")
+                    print(f"\n  [stop] Early stop: {sin_mejora} generaciones sin mejora global.")
                 break
 
             # ── Evolucionar: generar siguiente generación ─────────────────
@@ -436,7 +436,7 @@ def entrenar_modelos_por_loteria(
                     prob_mutacion, rng, n_est_opts, depth_opts, split_opts,
                 )
                 if verbose:
-                    print(f"  → Generación {gen+1}: "
+                    print(f"  -> Generacion {gen+1}: "
                           f"{elite} élite + {tam_poblacion-elite} hijos")
 
     # ── Resultado final ───────────────────────────────────────────────────
@@ -470,7 +470,7 @@ def entrenar_modelos_por_loteria(
     )
 
     if verbose:
-        print(f"\n✅ Entrenamiento completado")
+        print(f"\n[OK] Entrenamiento completado")
         print(f"   Mejor result acc: {mejor_acc_result:.4f}")
         print(f"   Mejor series acc: {mejor_acc_series:.4f}")
 

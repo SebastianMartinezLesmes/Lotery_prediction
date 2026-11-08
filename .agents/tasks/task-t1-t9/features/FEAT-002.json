@@ -1,0 +1,22 @@
+{
+  "id": "FEAT-002",
+  "type": "chore",
+  "description": "Re-entrenamiento de verificación: ejecutar python main.py --entrenar --modo test para comprobar que el pipeline end-to-end funciona con las features corregidas de FEAT-001. Este paso verifica la integración T1+T3 en entrenamiento real y genera nuevos .pkl limpios. Depende de FEAT-001 completado. Independiente de FEAT-003 (que modifica training_simple.py — se re-entrena de nuevo allí).",
+  "status": "completed",
+  "steps": [
+    "Ejecutar python main.py --entrenar --modo test y verificar que: (a) carga datos desde Excel o Neon, (b) genera features sin error, (c) el entrenamiento completa para ASTRO LUNA (y ASTRO SOL si hay datos), (d) guarda al menos un .pkl nuevo en IA_models/.",
+    "Si el entrenamiento falla por falta de datos en Neon, verificar que usa el fallback Excel (data/resultados_astro.xlsx). Si falla por error de código, diagnosticar y corregir en los archivos de FEAT-001 antes de continuar.",
+    "Commit re-entrenar: git add IA_models/ -- git commit -m 'chore: re-train models after T1-T5 data leakage fix'"
+  ],
+  "acceptance_criteria": [
+    "python main.py --entrenar --modo test completa sin excepción",
+    "Existen nuevos .pkl en IA_models/ (Get-ChildItem IA_models -Filter *.pkl devuelve archivos)",
+    "El log muestra 'Entrenamiento completado para todas las loterías'"
+  ],
+  "verification": [
+    "python main.py --entrenar --modo test",
+    "python -c \"import os; files = [f for f in os.listdir('IA_models') if f.endswith('.pkl')]; print(files)\""
+  ],
+  "blocked_reason": null,
+  "findings": "Training completed successfully on 2026-11-07. Excel fallback activated (Neon DATABASE_URL not configured). ASTRO LUNA trained with 989 records, 41 features, 2 test iterations. Result accuracy: 10.61%, Series accuracy: 10.44%. Models saved: 1_astro_luna_result.pkl, 1_astro_luna_series.pkl. Two bugs fixed during this step: (1) --modo CLI arg was not propagating to os.environ['TRAINING_MODE'] so settings used prod profile (genetic algorithm with n_jobs=-1) instead of test; fixed by setting os.environ and calling settings.ensure_directories() in ejecutar_entrenamiento(). (2) Unicode characters (star U+2605, checkmark, arrows) caused UnicodeEncodeError on Windows cp1252; fixed by replacing with ASCII equivalents in training_simple.py and save_training.py, and adding sys.stdout.reconfigure(encoding='utf-8') in main.py."
+}

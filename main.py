@@ -4,6 +4,13 @@ Permite ejecutar componentes individuales o el pipeline completo.
 """
 import os
 import sys
+
+# Ensure stdout/stderr use UTF-8 on Windows (avoids cp1252 UnicodeEncodeError)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 import argparse
 import numpy as np
 import pandas as pd
@@ -84,7 +91,13 @@ def ejecutar_entrenamiento(
         sincronizar: Si True (default), sincroniza con Neon antes de entrenar.
     """
     try:
-        modo_activo = (modo.lower() if modo else os.getenv('TRAINING_MODE', 'prod')).upper()
+        # Propagate --modo to os.environ so settings.get_training_profile()
+        # and TRAINING_CONFIGURE pick up the right profile at runtime.
+        if modo:
+            os.environ["TRAINING_MODE"] = modo.lower()
+            settings.ensure_directories()   # rebuild TRAINING_CONFIGURE
+
+        modo_activo = os.getenv('TRAINING_MODE', 'prod').upper()
 
         log_y_mostrar("="*70)
         log_y_mostrar(f"2. ENTRENAMIENTO DE MODELOS  [modo: {modo_activo}]")
