@@ -192,7 +192,10 @@ def predecir_para_loteria(df, loteria):
     # FEATURES PARA PREDICCION
     # =========================
 
-    features = X_train_df.tail(1).values
+    ultima_fecha = df_loteria["fecha"].max()
+    fecha_proxima = ultima_fecha + pd.Timedelta(days=1)
+    from src.features.feature_engineering import features_para_proximo_sorteo
+    features = features_para_proximo_sorteo(df_loteria, fecha_proxima).values
 
     if hasattr(modelo_result, "n_features_in_"):
         if features.shape[1] != modelo_result.n_features_in_:
