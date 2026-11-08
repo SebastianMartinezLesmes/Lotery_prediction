@@ -13,3 +13,6 @@ lightgbm==4.6.0
 
 # Neon PostgreSQL
 psycopg2-binary==2.9.12
+
+# Dev / testing
+pytest>=7.0.0
