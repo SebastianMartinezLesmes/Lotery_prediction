@@ -159,7 +159,7 @@ def predecir_para_loteria(df, loteria):
 
     if not (result_path and series_path):
         print(
-            f"\n❌ No se encontraron modelos entrenados para '{loteria}'.\n"
+            f"\nNo se encontraron modelos entrenados para '{loteria}'.\n"
             f"   Ejecuta primero: python main.py --entrenar --lottery \"{loteria}\"\n"
             f"   No se puede predecir sin modelos previos."
         )
@@ -289,7 +289,7 @@ def main(filtro_loteria=None):
         from src.database.sync import synchronize_database
         synchronize_database(filtro_loteria=filtro_loteria)
     except Exception as e_sync:
-        print(f"⚠️  Sincronización con Neon falló (usando datos locales): {e_sync}")
+        print(f"[WARN] Sincronizacion con Neon fallo (usando datos locales): {e_sync}")
 
     # ── Cargar datos desde Neon ───────────────────────────────────
     df = None
@@ -316,7 +316,7 @@ def main(filtro_loteria=None):
                         frames.append(df_lot)
                         loterias.append(lot)
                 except Exception as e_lot:
-                    print(f"⚠️  No se pudo cargar {lot} desde Neon: {e_lot}")
+                    print(f"[WARN] No se pudo cargar {lot} desde Neon: {e_lot}")
 
             if frames:
                 df = pd.concat(frames, ignore_index=True)
@@ -324,7 +324,7 @@ def main(filtro_loteria=None):
         finally:
             conn.close()
     except Exception as e_neon:
-        print(f"⚠️  Neon no disponible, usando fallback Excel: {e_neon}")
+        print(f"[WARN] Neon no disponible, usando fallback Excel: {e_neon}")
 
     # ── Fallback a Excel ──────────────────────────────────────────
     if df is None or df.empty:

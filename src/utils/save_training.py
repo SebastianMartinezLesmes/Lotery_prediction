@@ -82,7 +82,15 @@ def guardar_modelo_si_mejora(
         if os.path.exists(modelo_path):
             try:
                 existente = joblib.load(modelo_path)
-                acc_existente = existente.get("accuracy", 0)
+                # Compatibilidad de feature_names: si no coincide, ignorar el modelo guardado
+                if existente.get("feature_names") != FEATURE_COLUMNS:
+                    print(
+                        f"  ⚠ Modelo obsoleto ignorado (feature_names no coincide): "
+                        f"{os.path.basename(modelo_path)}"
+                    )
+                    acc_existente = 0
+                else:
+                    acc_existente = existente.get("accuracy", 0)
                 if accuracy <= acc_existente:
                     print(
                         f"  ↔ Sin mejora en {os.path.basename(modelo_path)} "

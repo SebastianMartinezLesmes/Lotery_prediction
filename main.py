@@ -255,7 +255,7 @@ def ejecutar_prediccion(loteria: Optional[str] = None) -> bool:
         log_y_mostrar("="*70)
         
         prediction_main(loteria)
-        print("\n✅ Predicciones generadas")
+        print("\nPredicciones generadas")
         return True
     except Exception as e:
         logger.error(f"Error en predicción: {e}")
