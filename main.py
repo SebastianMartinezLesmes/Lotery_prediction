@@ -205,7 +205,7 @@ def ejecutar_entrenamiento(
 
             # Generar features históricas (sin calendario)
             X_df = generar_features(df_loteria)
-            X_df = X_df.replace([np.inf, -np.inf], np.nan).dropna()
+            X_df = X_df.replace([np.inf, -np.inf], np.nan)
 
             # T7: align target by index instead of tail()
             df_loteria = df_loteria.loc[X_df.index]
