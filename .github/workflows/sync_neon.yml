@@ -17,6 +17,8 @@ jobs:
     name: Actualizar base de datos Neon
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write   # necesario para push a dev y me
 
     steps:
       - name: Checkout repositorio
@@ -51,6 +53,28 @@ jobs:
           TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | cut -d= -f2 || echo "0")
           echo "total_registros=${TOTAL}" >> "$GITHUB_OUTPUT"
           exit $EXIT_CODE
+
+      # ── Propagar master → dev y me ─────────────────────────────────
+      - name: Sincronizar ramas dev y me con master
+        if: success()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Asegura que tenemos el historial completo de las 3 ramas
+          git fetch origin dev me master
+
+          # ── dev ──────────────────────────────────────────────────────
+          git checkout dev
+          git merge origin/master --ff-only --no-edit \
+            || git merge origin/master --no-edit -m "chore: sync dev with master [skip ci]"
+          git push origin dev
+
+          # ── me ───────────────────────────────────────────────────────
+          git checkout me
+          git merge origin/master --ff-only --no-edit \
+            || git merge origin/master --no-edit -m "chore: sync me with master [skip ci]"
+          git push origin me
 
       # ── Resumen éxito ───────────────────────────────────────────────
       - name: Resumen — éxito
