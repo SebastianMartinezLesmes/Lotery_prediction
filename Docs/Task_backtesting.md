@@ -1,3 +1,10 @@
+> **Estado: PENDIENTE DE IMPLEMENTACIÓN** — `scripts/backtesting.py` no existe aún.
+> El split temporal ya fue implementado en `training_simple.py` (corte cronológico 80/20).
+> Lo que falta es la evaluación sorteo a sorteo descrita en este documento.
+> Última revisión: 2026-10-04
+
+---
+
 # Task: Backtesting del modelo de predicción
 
 Documento de planificación para implementar la evaluación real del modelo
@@ -7,27 +14,27 @@ sobre datos históricos, simulando condiciones de producción.
 
 ## Qué es el backtesting y por qué lo necesitamos
 
-El entrenamiento actual evalúa el modelo con un split aleatorio 80/20 del
-historial completo. Eso responde: *"¿qué tan bien memorizó el pasado?"*
+El entrenamiento actual evalúa el modelo con un **split temporal 80/20**:
+entrena con el 80% más antiguo y evalúa sobre el 20% más reciente. Eso responde:
+*"¿qué tan bien predice el modelo los sorteos más recientes?"*
 
-El backtesting temporal responde la pregunta correcta: *"¿qué tan bien hubiera
-predicho el modelo si lo hubiéramos usado en producción, sorteo por sorteo?"*
+El backtesting sorteo a sorteo responde la pregunta más exigente:
+*"¿qué tan bien hubiera predicho el modelo si lo hubiéramos usado en producción,
+para cada sorteo uno por uno, sin nunca ver el futuro?"*
 
-La diferencia es crítica. Un split aleatorio puede usar datos del futuro para
-entrenar (ej. el sorteo del 1 de mayo en el train, pero el del 15 de abril en
-el test), lo que sobreestima la capacidad real del modelo.
+La diferencia es que en el backtesting el modelo se re-evalúa (y opcionalmente
+se re-entrena) acumulando datos sorteo a sorteo, lo que simula con más fidelidad
+el uso real.
 
 ---
 
-## Líneas de referencia actuales (medidas sobre ASTRO LUNA, 996 registros)
-
-Antes de implementar, estos son los números contra los que hay que comparar:
+## Líneas de referencia actuales (medidas sobre ASTRO LUNA)
 
 | Estrategia | Acierto número exacto | Acierto dígito (promedio) |
 |---|---|---|
 | Azar puro | 0.11% (1 / 909 clases) | 10.00% |
 | Repetir número anterior | 5.02% | ~14.8% |
-| Modelo actual (split aleatorio) | ~25.25% | — |
+| Modelo actual (split temporal 80/20) | ~25.25% | — |
 | **Modelo con backtesting real** | **por medir** | **por medir** |
 
 El objetivo del backtesting es medir la columna "por medir" con honestidad.
@@ -44,8 +51,8 @@ scripts/backtesting.py
 
 ### Datos de entrada
 
-- `data/resultados_astro.xlsx` — historial local (fallback si Neon no está disponible)
-- O bien: datos cargados desde Neon vía `LotteriaRepository.get_all_results()`
+- Datos cargados desde Neon vía `LotteriaRepository.get_all_results()`
+- O fallback: `data/resultados_astro.xlsx`
 - Columnas requeridas: `fecha`, `lottery`, `result`, `series`
 - Ordenado por `fecha` ascendente (más antiguo primero)
 
@@ -80,9 +87,9 @@ Historial completo (996 sorteos):
 ### Paso 1 — Separar train inicial y ventana de test
 
 ```python
-df = cargar_datos(loteria)           # todos los registros ordenados por fecha
-df_train_base = df.iloc[:-ventana_test]   # 896 sorteos para entrenar
-df_test       = df.iloc[-ventana_test:]   # 100 sorteos para evaluar
+df = cargar_datos(loteria)                    # todos los registros ordenados por fecha
+df_train_base = df.iloc[:-ventana_test]       # 896 sorteos para entrenar
+df_test       = df.iloc[-ventana_test:]       # 100 sorteos para evaluar
 ```
 
 ### Paso 2 — Entrenamiento inicial
@@ -90,8 +97,6 @@ df_test       = df.iloc[-ventana_test:]   # 100 sorteos para evaluar
 Entrenar el modelo con `df_train_base` usando el mismo pipeline que producción:
 
 ```python
-os.environ["TRAINING_MODE"] = "prod"    # o "test" para backtest rápido
-
 X_df = generar_features(df_train_base)
 X    = X_df.values
 y_r  = df_train_base.tail(len(X_df))["result"].values
@@ -110,13 +115,6 @@ sorteo i=1:  train=[0..896]  →  predice sorteo 897  →  compara con real
 ...
 sorteo i=99: train=[0..994]  →  predice sorteo 995  →  compara con real
 ```
-
-En cada paso:
-1. Generar features sobre el histórico acumulado hasta `i-1`
-2. Tomar la última fila como features de predicción
-3. Predecir número (top-3) y signo (top-3)
-4. Comparar con el resultado real del sorteo `i`
-5. Registrar métricas
 
 ```python
 resultados = []
@@ -140,19 +138,16 @@ for i in range(len(df_test)):
 
     # Registrar
     resultados.append({
-        "fecha":          df_test.iloc[i]["fecha"],
-        "real_result":    real_result,
-        "pred_top1":      top3_numeros[0][0],
-        "pred_top3":      [n for n, _ in top3_numeros],
-        "real_en_top3":   real_result in [n for n, _ in top3_numeros],
-        "real_series":    real_series,
-        "pred_series":    top3_signos[0][0],
-        "series_ok":      real_series == top3_signos[0][0],
-        # Aciertos por dígito
-        "miles_ok":       (real_result//1000)%10 == (top3_numeros[0][0]//1000)%10,
-        "centenas_ok":    (real_result//100)%10  == (top3_numeros[0][0]//100)%10,
-        "decenas_ok":     (real_result//10)%10   == (top3_numeros[0][0]//10)%10,
-        "unidades_ok":    real_result%10         == top3_numeros[0][0]%10,
+        "fecha":        df_test.iloc[i]["fecha"],
+        "real_result":  real_result,
+        "pred_top1":    top3_numeros[0][0],
+        "real_en_top3": real_result in [n for n, _ in top3_numeros],
+        "real_series":  real_series,
+        "series_ok":    real_series == top3_signos[0][0],
+        "miles_ok":     (real_result//1000)%10 == (top3_numeros[0][0]//1000)%10,
+        "centenas_ok":  (real_result//100)%10  == (top3_numeros[0][0]//100)%10,
+        "decenas_ok":   (real_result//10)%10   == (top3_numeros[0][0]//10)%10,
+        "unidades_ok":  real_result%10         == top3_numeros[0][0]%10,
     })
 ```
 
@@ -192,16 +187,12 @@ REENTRENAR_CADA = 30   # re-entrenar cada 30 sorteos nuevos
 
 for i in range(len(df_test)):
     if i % REENTRENAR_CADA == 0 and i > 0:
-        # Re-entrenar con todos los datos acumulados hasta aquí
         df_acumulado = pd.concat([df_train_base, df_test.iloc[:i]])
         X_df = generar_features(df_acumulado)
         ...
         entrenar_modelos_por_loteria(X, y_r, y_s, loteria + "_backtest")
-        # Recargar modelo
         modelo_result, modelo_series = cargar_mejores_modelos(loteria + "_backtest")
 ```
-
-Esto responde: *"¿mejora el modelo si se re-entrena a medida que llegan datos nuevos?"*
 
 ---
 
@@ -241,7 +232,7 @@ python scripts/backtesting.py --lottery "ASTRO LUNA" --ventana 100 --solo-evalua
 El modelo se considera útil si:
 
 - `real_en_top3` > 10% — el número real aparece en las 3 predicciones más
-  de lo que aparecería por azar (azar top3 ≈ 0.33%)
+  de lo que aparecería por azar (azar top-3 ≈ 0.33%)
 - `acierto_serie` > 15% — supera el azar de signo (8.3%)
 - `acc_unidades` > 20% — al menos el doble del azar por dígito (10%)
 
@@ -249,12 +240,12 @@ El modelo se considera útil si:
 
 ## Restricciones importantes
 
-- El modelo de backtesting se guarda en slots separados
-  (`loteria + "_backtest"`) para no sobreescribir los modelos de producción
+- El modelo de backtesting se guarda en slots separados (`loteria + "_backtest"`)
+  para no sobreescribir los modelos de producción
 - Los datos de test **nunca se tocan durante el entrenamiento** de cada paso
 - El script debe poder ejecutarse sin conexión a Neon (usando Excel como fallback)
 - El tiempo estimado para backtest completo con `ventana=100` y re-entrenamiento
-  cada 30 sorteos es: 3-4 entrenamientos × 5 min = ~20 minutos
+  cada 30 sorteos es: ~3-4 entrenamientos × 5 min = ~20 minutos
 
 ---
 

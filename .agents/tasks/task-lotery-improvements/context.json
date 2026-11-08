@@ -1,0 +1,24 @@
+{
+  "project_type": "Python ML CLI — lottery prediction with RandomForest + genetic algorithm, Neon PostgreSQL sync, GitHub Actions automation",
+  "language": "Python 3.11",
+  "build_system": "No build step. Direct python execution. Entry point: main.py",
+  "test_framework": "None — no test suite exists. Verification is done via python -c 'import main' and python main.py --help",
+  "build_command": "python -c \"import main\"",
+  "test_command": "python -c \"import main\" && python main.py --help",
+  "verification_instructions": "1. git checkout master. 2. python -c 'import main' — must succeed with no errors. 3. python main.py --help — must print usage. 4. python -c 'from src.core.config import settings; print(settings.SIGNOS, settings.LOTTERIES)' — must print both lists. 5. python -c 'from src.utils.training_simple import entrenar_modelos_por_loteria' — must succeed. 6. python -c 'from src.utils.prediction import main' — must succeed.",
+  "snapshot_or_generated_files": null,
+  "environment_constraints": "Currently on branch 'me'. Must git checkout master before any commit. Never push — commits stay local. Use 'git add <specific files>' only, never git add -A or git add .",
+  "contribution_requirements": "English commit messages. Specific git add. Do NOT modify src/features/feature_engineering.py. Do NOT change the RandomForest algorithm or the 41 features. Do NOT create tests.",
+  "key_patterns": "settings imported as 'from src.core.config import settings'. Logger via get_main_logger(). Duplicate logger.info+print pattern (T14: replace headers with log_y_mostrar helper). conn.close() currently outside finally (T11 pattern). Series encoding uses astype('category').cat.codes without fixed categories (T8 pattern). FEATURE_COLUMNS imported from src.features.feature_engineering in save_training.py.",
+  "relevant_files": [
+    "main.py",
+    "src/core/config.py",
+    "src/utils/prediction.py",
+    "src/utils/training_simple.py",
+    "src/utils/save_training.py",
+    "Docs/ARCHITECTURE.md",
+    "README.md",
+    "requirements.txt"
+  ],
+  "directory_structure": "main.py (CLI entry), src/core/config.py (Settings class + profiles), src/utils/ (training_simple.py, prediction.py, save_training.py, mutation.py, batch_prediction.py, training_visualizer.py, alerts.py, drop_cache.py), src/features/feature_engineering.py (DO NOT TOUCH — 41 features), src/database/ (connection.py, repository.py, queries.py, sync.py), src/excel/ (excel_updater.py, read_excel.py), IA_models/ (only ASTRO LUNA .pkl files), data/ (resultados_astro.xlsx, results.json), Docs/ (ARCHITECTURE.md, README.md at root)"
+}

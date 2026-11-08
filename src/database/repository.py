@@ -178,7 +178,7 @@ class LotteriaRepository:
         Actualiza un resultado existente.
 
         Returns:
-            True si se actualizó al menos una fila, False si no existía.
+            True si se procesó al menos una fila, False si no.
         """
         conn = self._conn.get_connection()
         try:
@@ -187,7 +187,7 @@ class LotteriaRepository:
                     UPSERT_RESULT,
                     {"fecha": fecha, "loteria": loteria, "result": result, "series": series},
                 )
-                affected = cur.rowcount
+                affected = len(cur.fetchall())  # RETURNING id → contar filas retornadas
             conn.commit()
             logger.info(f"update_result({fecha}, {loteria}): {affected} filas afectadas")
             return affected > 0
@@ -264,13 +264,17 @@ class LotteriaRepository:
 
     def upsert_results(self, records: List[Dict]) -> int:
         """
-        Inserta o actualiza registros (INSERT … ON CONFLICT DO UPDATE).
+        Inserta o actualiza registros (INSERT … ON CONFLICT DO UPDATE … RETURNING id).
+
+        Usa RETURNING id para que el conteo sea correcto independientemente de
+        si la fila fue insertada o actualizada (psycopg2 puede reportar rowcount=0
+        en upserts sin RETURNING cuando el valor no cambia).
 
         Args:
             records: Lista de dicts con claves fecha, loteria, result, series.
 
         Returns:
-            Número de filas afectadas.
+            Número de filas afectadas (insertadas + actualizadas).
         """
         if not records:
             return 0
@@ -280,7 +284,9 @@ class LotteriaRepository:
             with conn.cursor() as cur:
                 for rec in records:
                     cur.execute(UPSERT_RESULT, rec)
-                    affected += cur.rowcount
+                    # fetchall() sobre el RETURNING consume las filas retornadas;
+                    # len() da el conteo exacto sin depender de rowcount
+                    affected += len(cur.fetchall())
             conn.commit()
             logger.info(f"upsert_results: {affected} registros upserted")
         except Exception as e:

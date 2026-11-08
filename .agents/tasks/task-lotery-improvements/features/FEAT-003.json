@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-003",
+  "type": "docs",
+  "description": "Apply T17–T19, T21–T22: fix ARCHITECTURE.md flow diagram (sincronizar_con_neon → synchronize_database), annotate legacy files in directory tree, add ASTRO SOL missing-models note, add ⚠️ Aviso importante section and Docker usage section to README.md, pin requirements.txt to exact installed versions. Independent of FEAT-001 and FEAT-002 (touches different files).",
+  "status": "completed",
+  "steps": [
+    "Docs/ARCHITECTURE.md — T18: in the 'Flujo de datos' section, change 'sincronizar_con_neon()' to 'synchronize_database()'",
+    "Docs/ARCHITECTURE.md — T18: in the directory tree under src/utils/, add inline comments to mutation.py, training.py, batch_prediction.py, training_visualizer.py, and the src/excel/ section to clarify they exist in the filesystem: append '# presente — uso interno / legacy' after each of those entries",
+    "Docs/ARCHITECTURE.md — T17: in the IA_models/ section of the directory tree, add a comment line: '# Solo existen modelos para ASTRO LUNA. ASTRO SOL aún no tiene modelos entrenados.' In the 'Modelos guardados' section, add the same note as a blockquote or paragraph.",
+    "README.md — T19: after the '# Sistema de Predicción de Lotería' title line and the short description paragraph, insert the '## ⚠️ Aviso importante' section: 'Los modelos entrenados actualmente (`IA_models/`) cubren **solo ASTRO LUNA**. ASTRO SOL no tiene modelos generados todavía; ejecutar `--predecir` o `--entrenar` sin filtro intentará ambas loterías, pero solo ASTRO LUNA producirá resultados válidos.'",
+    "README.md — T21: before the '## Documentación' section, insert '## Uso con Docker' with four bash examples: docker build, docker run pipeline, docker run --actualizar, and docker-compose up for each service",
+    "README.md — T17: in the 'Resultados actuales' table section, add a blockquote below: '> Nota: solo ASTRO LUNA tiene modelos entrenados. ASTRO SOL aún no dispone de modelos en `IA_models/`.'",
+    "requirements.txt — T22: replace all installed-package lines with exact pinned versions (pandas==2.3.0, numpy==2.2.4, scikit-learn==1.7.0, openpyxl==3.1.5, joblib==1.5.1, requests==2.32.3, beautifulsoup4==4.13.4, tqdm==4.67.1, python-dotenv==1.2.1, pydantic==2.12.5, xgboost==3.2.0, lightgbm==4.6.0, psycopg2-binary==2.9.12). Keep scikit-optimize>=0.9.0, schedule>=1.2.0, APScheduler>=3.10.0 as-is with a comment '# Optional — not installed in current environment'",
+    "git add Docs/ARCHITECTURE.md README.md requirements.txt",
+    "git commit -m 'docs: T17-T19 T21-T22 update docs and pin dependencies'"
+  ],
+  "acceptance_criteria": [
+    "Docs/ARCHITECTURE.md contains 'synchronize_database()' in the flow diagram (not 'sincronizar_con_neon()')",
+    "Docs/ARCHITECTURE.md mentions that only ASTRO LUNA models exist",
+    "README.md contains '## ⚠️ Aviso importante' section",
+    "README.md contains '## Uso con Docker' section with docker build and docker run examples",
+    "requirements.txt contains 'pandas==2.3.0' (exact pin)",
+    "python -c 'import pandas, numpy, sklearn, openpyxl, joblib, requests, bs4, tqdm, dotenv, pydantic, xgboost, lightgbm, psycopg2' exits with code 0",
+    "git log --oneline shows commit 'docs: T17-T19 T21-T22 update docs and pin dependencies' on master"
+  ],
+  "verification": [
+    "python -c \"import pandas, numpy, sklearn, openpyxl, joblib, requests, bs4, tqdm, dotenv, pydantic, xgboost, lightgbm, psycopg2\"",
+    "python main.py --help"
+  ],
+  "blocked_reason": null,
+  "findings": "All steps completed successfully. ARCHITECTURE.md: 'sincronizar_con_neon()' replaced with 'synchronize_database()', legacy inline comments added to mutation.py/training.py/batch_prediction.py/training_visualizer.py and excel/ section, ASTRO LUNA-only note added to IA_models/ directory entry and 'Modelos guardados' section. README.md: '⚠️ Aviso importante' section inserted after title, blockquote note added below 'Resultados actuales' table, '## Uso con Docker' section with 4 bash examples inserted before '## Documentación'. requirements.txt: all 13 core packages pinned to exact versions, optional packages kept with '>=' range and 'Optional' comment. Both verification commands passed (imports + --help)."
+}

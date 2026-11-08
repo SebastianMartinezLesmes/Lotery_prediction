@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Apply T15–T16 to src/utils/training_simple.py: replace random train_test_split with deterministic chronological 80/20 split (sort order is already guaranteed upstream by df_loteria.sort_values('fecha')), and add baseline accuracy log after training completes. Independent of FEAT-001 logic but should run after it since FEAT-001 is committed first.",
+  "status": "completed",
+  "steps": [
+    "src/utils/training_simple.py — T15: in _evaluar_individuo, delete the train_test_split call and its 12-way tuple unpacking. Replace with chronological slice: n = len(X); split_idx = int(n * (1 - test_size)); X_tr, X_te = X[:split_idx], X[split_idx:]; ym_tr, ym_te = y_miles[:split_idx], y_miles[split_idx:]; yc_tr, yc_te = y_centenas[:split_idx], y_centenas[split_idx:]; yd_tr, yd_te = y_decenas[:split_idx], y_decenas[split_idx:]; yu_tr, yu_te = y_unidades[:split_idx], y_unidades[split_idx:]; ys_tr, ys_te = y_series[:split_idx], y_series[split_idx:]",
+    "src/utils/training_simple.py — T15 cleanup: remove 'from sklearn.model_selection import train_test_split' import (it is only used in _evaluar_individuo)",
+    "src/utils/training_simple.py — T16: in entrenar_modelos_por_loteria, just before the '# ── Guardar en memoria IA' block, add: from collections import Counter; baseline_result = max(Counter(y_result % 10).values()) / len(y_result); baseline_series = max(Counter(y_series).values()) / len(y_series); if verbose: print(f'  Modelo result: {mejor_acc_result:.2%} | Línea base: {baseline_result:.2%}'); print(f'  Modelo series: {mejor_acc_series:.2%} | Línea base: {baseline_series:.2%}')",
+    "git add src/utils/training_simple.py",
+    "git commit -m 'fix: T15-T16 chronological split and baseline accuracy logging'"
+  ],
+  "acceptance_criteria": [
+    "python -c 'from src.utils.training_simple import entrenar_modelos_por_loteria' exits with code 0",
+    "No 'from sklearn.model_selection import train_test_split' import in training_simple.py",
+    "git log --oneline shows commit 'fix: T15-T16 chronological split and baseline accuracy logging' on master"
+  ],
+  "verification": [
+    "python -c \"from src.utils.training_simple import entrenar_modelos_por_loteria\"",
+    "python -c \"import ast, sys; src=open('src/utils/training_simple.py').read(); assert 'train_test_split' not in src, 'import still present'; print('OK')\""
+  ],
+  "blocked_reason": null,
+  "findings": "All T15–T16 changes applied and verified on master (commit 100d767). Key facts for later FEAT steps: (1) train_test_split is no longer imported or used in training_simple.py — chronological 80/20 split is now used in _evaluar_individuo. (2) Baseline accuracy (majority-class frequency) is printed for both 'result' and 'series' models after training, but only when verbose=True. (3) The verification command in FEAT-002.json uses open() without encoding — on Windows with cp1252 default this fails due to UTF-8 characters (★, ←) in the file; the actual check passes when encoding='utf-8' is specified. FEAT-003 should be aware of this if it runs similar file-content checks."
+}

@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from src.core.logger import LoggerManager
 from src.core.config import settings
 
-logger = LoggerManager.get_logger("scheduler", "scheduler.log")
+logger = LoggerManager.get_logger("scheduler")
 
 
 class GracefulKiller:

@@ -62,22 +62,46 @@ class SuperAstroScraper:
         """
         Extrae todos los resultados disponibles de la tabla HTML en una sola llamada.
 
+        Raises:
+            APIError: Si no se encuentran las tablas esperadas en el HTML, o si
+                      la tabla está completamente vacía (sin filas de datos). Esto
+                      distingue "el sitio cambió su layout" de "no hay resultados
+                      nuevos", evitando que un cambio de estructura se silencie.
+
         Returns:
             Lista de dicts con todos los resultados encontrados en la página.
+            Puede ser vacía solo si la tabla existe pero ninguna fila pasa la
+            validación de formato (fecha/número inválidos), lo que se loguea
+            como advertencia.
         """
+        from src.core.exceptions import APIError
+
         tablas = soup.find_all('table')
         if len(tablas) < 2:
-            logger.error("No se encontraron suficientes tablas en la página")
-            return []
+            raise APIError(
+                f"Estructura HTML inesperada para {loteria}: "
+                f"se esperaban ≥2 tablas, se encontraron {len(tablas)}. "
+                f"El sitio puede haber cambiado su layout."
+            )
 
         tabla_index = 1 if "LUNA" in loteria.upper() else 0
         tabla = tablas[tabla_index]
         filas = tabla.find_all('tr')
 
+        # Filas de datos = todas menos la cabecera
+        filas_datos = filas[1:]
+        if not filas_datos:
+            raise APIError(
+                f"La tabla de {loteria} (índice {tabla_index}) no tiene filas de datos. "
+                f"El sitio puede estar vacío o haber cambiado su estructura."
+            )
+
         resultados = []
-        for fila in filas[1:]:
+        filas_invalidas = 0
+        for fila in filas_datos:
             celdas = fila.find_all('td')
             if len(celdas) < 3:
+                filas_invalidas += 1
                 continue
 
             fecha_celda = celdas[0].text.strip()
@@ -93,10 +117,12 @@ class SuperAstroScraper:
                 except ValueError:
                     continue
             if fecha_obj is None:
+                filas_invalidas += 1
                 continue
 
             numero_limpio = re.sub(r'\D', '', numero)
             if not numero_limpio or len(numero_limpio) != 4:
+                filas_invalidas += 1
                 continue
 
             resultados.append({
@@ -106,12 +132,30 @@ class SuperAstroScraper:
                 'series':  self.normalizar_signo(signo)
             })
 
+        if filas_invalidas > 0:
+            logger.warning(
+                f"  {loteria}: {filas_invalidas} fila(s) descartadas por formato inválido "
+                f"(fecha o número no reconocidos)."
+            )
+
+        # Si parseamos filas pero ninguna fue válida, es una señal de alerta
+        if not resultados and filas_datos:
+            raise APIError(
+                f"Se encontraron {len(filas_datos)} fila(s) en la tabla de {loteria} "
+                f"pero ninguna pasó la validación de formato. "
+                f"El formato del sitio puede haber cambiado."
+            )
+
         return resultados
 
     def obtener_todos_resultados_pagina(self, loteria: str) -> List[Dict]:
         """
         Obtiene TODOS los resultados disponibles en la página en un solo request.
         Mucho más eficiente que consultar fecha por fecha.
+
+        Raises:
+            APIError: Si el request falla, el sitio responde con error HTTP,
+                      o la estructura HTML no es la esperada.
         """
         from src.core.exceptions import APIError
         try:
@@ -122,6 +166,10 @@ class SuperAstroScraper:
             resultados = self._parsear_tabla(soup, loteria)
             logger.info(f"  ✓ {len(resultados)} resultados encontrados en la página")
             return resultados
+        except APIError:
+            # Ya es un APIError bien descrito (de _parsear_tabla o de una llamada anterior);
+            # re-lanzar sin envolver para no duplicar el mensaje.
+            raise
         except Exception as e:
             logger.error(f"Error obteniendo resultados de {loteria}: {e}")
             raise APIError(f"Error obteniendo resultados de {loteria}: {e}") from e

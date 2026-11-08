@@ -55,6 +55,7 @@ INSERT_RESULT = """
 """
 
 # Insertar o actualizar si ya existe (ON CONFLICT sobre fecha + loteria_id)
+# RETURNING id garantiza rowcount = 1 por fila siempre, incluso si no hubo cambios
 UPSERT_RESULT = """
     INSERT INTO resultados (fecha, loteria_id, result, signo_id)
     VALUES (
@@ -67,6 +68,7 @@ UPSERT_RESULT = """
     DO UPDATE SET
         result   = EXCLUDED.result,
         signo_id = EXCLUDED.signo_id
+    RETURNING id
 """
 
 # Actualizar un resultado existente por fecha y lotería

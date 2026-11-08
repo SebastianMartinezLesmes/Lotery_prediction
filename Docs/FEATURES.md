@@ -3,6 +3,9 @@
 Descripción completa de las 41 features que usa el modelo, su justificación
 estadística y cómo se generan.
 
+Definidas en `src/features/feature_engineering.py` → `FEATURE_COLUMNS`.
+Generadas por `generar_features(df)` que recibe el DataFrame ordenado por fecha.
+
 ---
 
 ## Por qué no hay features de calendario
@@ -19,9 +22,6 @@ y la señal real (patrones históricos) queda diluida.
 ---
 
 ## Las 41 features actuales
-
-Definidas en `src/features/feature_engineering.py` → `FEATURE_COLUMNS`.
-Generadas por `generar_features(df)` que recibe el DataFrame ordenado por fecha.
 
 ### Lags del resultado completo (5 features)
 
@@ -46,13 +46,22 @@ pero presente. Los lags más lejanos (5, 7) capturan patrones de más largo plaz
 | `lag1_centenas` | Dígito de centenas del resultado anterior |
 | `lag1_decenas` | Dígito de decenas del resultado anterior |
 | `lag1_unidades` | Dígito de unidades del resultado anterior |
-| `lag2_miles` … `lag2_unidades` | Lo mismo para hace 2 sorteos |
-| `lag3_miles` … `lag3_unidades` | Lo mismo para hace 3 sorteos |
+| `lag2_miles` | Dígito de miles de hace 2 sorteos |
+| `lag2_centenas` | Dígito de centenas de hace 2 sorteos |
+| `lag2_decenas` | Dígito de decenas de hace 2 sorteos |
+| `lag2_unidades` | Dígito de unidades de hace 2 sorteos |
+| `lag3_miles` | Dígito de miles de hace 3 sorteos |
+| `lag3_centenas` | Dígito de centenas de hace 3 sorteos |
+| `lag3_decenas` | Dígito de decenas de hace 3 sorteos |
+| `lag3_unidades` | Dígito de unidades de hace 3 sorteos |
 
 **Justificación**: el modelo compuesto predice dígito por dígito. Darle los
 dígitos individuales de sorteos anteriores permite aprender patrones por posición
 (ej. si el dígito de unidades tiende a oscilar entre 3 y 7). Autocorrelación
 por dígito ≈ 0.06-0.08.
+
+Los dígitos de **lag2 y lag3 están implementados** en `feature_engineering.py`
+(bucle `for lag_n in [1, 2, 3]:`). Están documentados correctamente con 12 features.
 
 ---
 
@@ -148,8 +157,8 @@ puede capturar patrones de alternancia.
 | `freq_90` | Veces que apareció en los últimos 90 sorteos |
 
 **Nota**: estas features miden la frecuencia del número que estamos prediciendo,
-no del lag1. Esto introduce un leak potencial en entrenamiento, pero en predicción
-se calcula correctamente sobre el historial hasta el momento actual.
+no del lag1. En predicción se calcula correctamente sobre el historial hasta el
+momento actual. En entrenamiento introduce un potencial leak documentado en el código.
 
 ---
 
@@ -159,7 +168,12 @@ se calcula correctamente sobre el historial hasta el momento actual.
 |---|---|
 | `dias_desde_ultimo` | Días desde la última vez que salió este número exacto |
 
-0 si el número nunca ha aparecido antes en el histórico.
+0 si el número nunca ha aparecido antes en el histórico. Se calcula con un
+diccionario `last_seen` que itera cronológicamente sobre el DataFrame.
+
+---
+
+## Total: 5 + 12 + 4 + 1 + 7 + 3 + 2 + 3 + 3 + 1 = **41 features**
 
 ---
 
@@ -170,21 +184,19 @@ Basado en el análisis estadístico y el impacto observado en accuracy:
 | Prioridad | Features |
 |---|---|
 | Alta | `diff_1`, `signo_diff_1`, `diff_abs_1`, `lag1_z_score_30` |
-| Media | `result_lag_1..3`, `lag1_*_dígitos`, `rolling_mean_7/30`, `lag1_sobre_media_*` |
+| Media | `result_lag_1..3`, `lag1/2/3_*`, `rolling_mean_7/30`, `lag1_sobre_media_*` |
 | Baja | `freq_*`, `dias_desde_ultimo`, `racha`, `tendencia_*` |
 
-Para medir la importancia real, se puede usar `feature_importances_` de los
-modelos RF guardados:
+Para medir la importancia real se puede usar `feature_importances_` del sub-modelo
+de unidades (el más informativo):
 
 ```python
 import joblib
 payload = joblib.load("IA_models/1_astro_luna_result.pkl")
 modelo = payload["model"]
-
-# Para _ModeloCompuesto, acceder al sub-modelo de unidades (más informativo)
-importancias = modelo.unidades.feature_importances_
 nombres = payload["feature_names"]
 
+importancias = modelo.unidades.feature_importances_
 for nombre, imp in sorted(zip(nombres, importancias), key=lambda x: -x[1])[:10]:
     print(f"  {nombre}: {imp:.4f}")
 ```
@@ -193,12 +205,9 @@ for nombre, imp in sorted(zip(nombres, importancias), key=lambda x: -x[1])[:10]:
 
 ## Agregar nuevas features
 
-Para agregar una feature nueva:
-
 1. Calcularla en `generar_features()` de `feature_engineering.py`
 2. Agregarla a `FEATURE_COLUMNS` en el mismo archivo
-3. **Borrar los modelos existentes** en `IA_models/` — fueron entrenados con
-   el número anterior de features y son incompatibles
+3. **Borrar los modelos existentes** en `IA_models/` — son incompatibles
 4. Re-entrenar: `python main.py --entrenar --modo prod`
 
 Si no se borran los modelos, la predicción fallará con:
@@ -206,5 +215,5 @@ Si no se borran los modelos, la predicción fallará con:
 ValueError: El modelo espera 41 features pero recibió 42
 ```
 
-El número de features se guarda en `payload["n_features"]` de cada modelo .pkl,
+El número de features se guarda en `payload["n_features"]` de cada modelo `.pkl`,
 lo que permite detectar incompatibilidades antes de intentar predecir.

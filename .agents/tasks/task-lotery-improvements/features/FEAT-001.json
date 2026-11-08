@@ -1,0 +1,45 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Apply T7–T14: fix target index alignment, series encoding with fixed SIGNOS categories, double-sync in pipeline, staleness warning, conn.close() in finally, replace hardcoded lottery lists with settings.LOTTERIES, remove os.environ mutation, and clean up dead imports / duplicate log patterns. Touches main.py, src/core/config.py, src/utils/prediction.py, src/utils/save_training.py.",
+  "status": "completed",
+  "steps": [
+    "git checkout master (must be on master before any changes)",
+    "src/core/config.py — add SIGNOS list and LOTTERIES list as class attributes in Settings, inside the '# LOTTERY CONFIG' section: SIGNOS: list = ['ARI','TAU','GEM','CAN','LEO','VIR','LIB','ESC','SAG','CAP','ACU','PIS'] and LOTTERIES: list = ['ASTRO SOL', 'ASTRO LUNA']. Update get_training_profile() signature to accept optional mode: str = None — use it when provided, otherwise fall back to os.getenv('TRAINING_MODE','prod').lower()",
+    "main.py — T7: change 'df_loteria = df_loteria.tail(len(X_df))' to 'df_loteria = df_loteria.loc[X_df.index]' (line after X_df dropna in ejecutar_entrenamiento loop)",
+    "main.py — T8: replace 'df[\"series\"] = df[\"series\"].astype(str).str.upper().astype(\"category\").cat.codes' with 'df[\"series\"] = pd.Categorical(df[\"series\"].astype(str).str.upper(), categories=settings.SIGNOS).codes'",
+    "main.py — T9: add 'sincronizar: bool = True' param to ejecutar_entrenamiento; wrap synchronize_database try/except with 'if sincronizar:'; in ejecutar_pipeline_completo change lambda to 'lambda: ejecutar_entrenamiento(sincronizar=False)'",
+    "main.py — T10: inside per-lottery loop after 'df_loteria = df_loteria.sort_values(\"fecha\").reset_index(drop=True)', add staleness check: compute ultima_fecha = df_loteria['fecha'].max(); dias = (pd.Timestamp.now() - ultima_fecha).days; if dias > 7: logger.warning(f'{nombre_loteria}: datos desactualizados — última fecha {ultima_fecha.date()} ({dias} días)')",
+    "main.py — T11: refactor Neon loading block in ejecutar_entrenamiento so conn.close() is inside a finally block: conn = NeonConnection(); try: [all repository/frames logic]; finally: conn.close()",
+    "main.py — T12: replace both occurrences of loterias_neon = ['ASTRO SOL', 'ASTRO LUNA'] with loterias_neon = list(settings.LOTTERIES)",
+    "main.py — T13: remove 'os.environ[\"TRAINING_MODE\"] = modo.lower()' and 'settings.ensure_directories()' from the 'if modo:' block; replace modo_activo line with: modo_activo = (modo.lower() if modo else os.getenv('TRAINING_MODE', 'prod')).upper()",
+    "main.py — T14a: remove 'from src.api.superastro_scraper import SuperAstroScraper' import",
+    "main.py — T14b: add log_y_mostrar helper after the logger line: def log_y_mostrar(msg: str) -> None: logger.info(msg); print(msg)",
+    "main.py — T14c: replace duplicate logger.info+print pairs for section headers (the '='*70 separator lines and step titles in ejecutar_limpieza, ejecutar_actualizacion, ejecutar_entrenamiento, ejecutar_prediccion) with log_y_mostrar calls",
+    "main.py — T14d: in mostrar_configuracion, replace 'print(f\"API URL: {settings.API_URL}\")' line and 'print(f\"Lotería: {settings.FIND_LOTERY}\")' with 'print(f\"Loterías: {settings.LOTTERIES}\")'",
+    "src/utils/prediction.py — T7: change 'df_loteria = df_loteria.tail(len(X_train_df))' to 'df_loteria = df_loteria.loc[X_train_df.index]'",
+    "src/utils/prediction.py — T8: replace y_series encoding with pd.Categorical(..., categories=settings.SIGNOS).codes pattern (same as main.py fix)",
+    "src/utils/prediction.py — T11: in main(), wrap conn.close() in a finally block",
+    "src/utils/prediction.py — T12: replace loterias_neon = ['ASTRO SOL', 'ASTRO LUNA'] with loterias_neon = list(settings.LOTTERIES)",
+    "src/utils/save_training.py — T8: add sign_mapping key to payload dict: '\"sign_mapping\": {i: s for i, s in enumerate(settings.SIGNOS)}' right after the 'feature_names' key; add 'from src.core.config import settings' import if not already present",
+    "git add src/core/config.py main.py src/utils/prediction.py src/utils/save_training.py",
+    "git commit -m 'fix: T7-T14 main.py logic and config improvements'"
+  ],
+  "acceptance_criteria": [
+    "python -c 'import main' exits with code 0",
+    "python main.py --help prints usage without error",
+    "python -c 'from src.core.config import settings; assert settings.SIGNOS[0]==\"ARI\"; assert \"ASTRO LUNA\" in settings.LOTTERIES; print(\"OK\")' prints OK",
+    "python -c 'from src.utils.prediction import main' exits with code 0",
+    "python -c 'from src.utils.save_training import guardar_modelo_si_mejora' exits with code 0",
+    "git log --oneline shows commit 'fix: T7-T14 main.py logic and config improvements' on master"
+  ],
+  "verification": [
+    "python -c \"import main\"",
+    "python main.py --help",
+    "python -c \"from src.core.config import settings; print(settings.SIGNOS); print(settings.LOTTERIES)\"",
+    "python -c \"from src.utils.prediction import main\"",
+    "python -c \"from src.utils.save_training import guardar_modelo_si_mejora\""
+  ],
+  "blocked_reason": null,
+  "findings": "All T7–T14 changes applied and verified on master (commit 4150dbc). Key facts for later FEAT steps: (1) settings.SIGNOS and settings.LOTTERIES are now authoritative — any code that references zodiac categories or lottery names must use them. (2) get_training_profile() now accepts an optional mode: str = None parameter. (3) ejecutar_entrenamiento() has a new sincronizar: bool = True parameter — the pipeline passes sincronizar=False to avoid double sync. (4) save_training.py payload now includes sign_mapping key. (5) log_y_mostrar() helper is defined at module level in main.py for reuse by later FEAT steps. (6) SuperAstroScraper import was removed from main.py — do not re-add it."
+}

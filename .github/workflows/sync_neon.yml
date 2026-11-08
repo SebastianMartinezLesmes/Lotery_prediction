@@ -2,9 +2,10 @@ name: Auto_Neon_Sync
 
 on:
   schedule:
-    # Cada 3 días a las 12:00 UTC (días 1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31)
-    - cron: '0 12 */3 * *'
-  workflow_dispatch:        # Ejecución manual desde la UI de GitHub
+    # Diario a las 12:00 UTC — incremental e idempotente: si la DB ya está
+    # al día retorna 0 registros sin error.
+    - cron: '0 12 * * *'
+  workflow_dispatch:
     inputs:
       filtro_loteria:
         description: 'Filtro de lotería (opcional, ej: luna, sol)'
@@ -30,9 +31,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{runner.os}}-pip-${{hashFiles('requirements.txt')}}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
-            ${{runner.os}}-pip-
+            ${{ runner.os }}-pip-
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
@@ -40,31 +41,59 @@ jobs:
       - name: Sincronizar Neon
         id: sync
         env:
-          DATABASE_URL: ${{secrets.NEON_DATABASE_URL}}
-          FILTRO: ${{github.event.inputs.filtro_loteria}}
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          FILTRO: ${{ github.event.inputs.filtro_loteria }}
         run: |
           set -euo pipefail
-          python scripts/sync_check.py | tee /tmp/sync_output.txt
-          TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | cut -d= -f2)
+          python scripts/sync_check.py > /tmp/sync_output.txt 2>&1
+          EXIT_CODE=$?
+          cat /tmp/sync_output.txt
+          TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | cut -d= -f2 || echo "0")
           echo "total_registros=${TOTAL}" >> "$GITHUB_OUTPUT"
+          exit $EXIT_CODE
 
-      - name: Resumen de ejecución
-        if: always()
-        env:
-          DATABASE_URL: ${{secrets.NEON_DATABASE_URL}}
+      # ── Resumen éxito ───────────────────────────────────────────────
+      - name: Resumen — éxito
+        if: success()
         run: |
-          echo "## 🎯 Sincronización Neon — $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_STEP_SUMMARY"
+          echo "## ✅ Sincronización Neon — $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Registros sincronizados | ${{steps.sync.outputs.total_registros || 'N/A'}} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Filtro aplicado | ${{github.event.inputs.filtro_loteria || 'Todas las loterías'}} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Trigger | ${{github.event_name}} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Fechas máximas por lotería" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Registros nuevos | ${{ steps.sync.outputs.total_registros || '0' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Filtro | ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trigger | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ -f /tmp/sync_output.txt ]; then
+            echo "### Fechas máximas por lotería" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             grep -E '(ASTRO|Lotería|-----)' /tmp/sync_output.txt >> "$GITHUB_STEP_SUMMARY" || true
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # ── Resumen fallo ───────────────────────────────────────────────
+      - name: Resumen — fallo
+        if: failure()
+        run: |
+          echo "## ❌ Sincronización Neon FALLIDA — $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Filtro | ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trigger | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Causas posibles" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Secret ausente o expirado**: verificar \`NEON_DATABASE_URL\` en Settings → Secrets." >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Sitio superastro.com.co cambió su layout**: el scraper no encontró la tabla esperada." >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Timeout de conexión a Neon**: el servicio tardó más de 15 s (3 reintentos agotados)." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Últimas 40 líneas del log" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/sync_output.txt ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -40 /tmp/sync_output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No se generó output — el fallo ocurrió antes de que el script arrancara._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Ejecuta el workflow manualmente con \`workflow_dispatch\` después de corregir el problema." >> "$GITHUB_STEP_SUMMARY"

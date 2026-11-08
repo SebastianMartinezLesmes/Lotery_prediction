@@ -11,10 +11,11 @@ decisiones tomadas y líneas de mejora futuras.
 |---|---|
 | Algoritmo base | RandomForest (modelo compuesto por dígitos) |
 | Features | 41 históricas (sin calendario) |
-| Entrenamiento | Paralelo con early stopping |
-| Modos | `test` (2 iter, secuencial) / `prod` (60 iter, 4 núcleos) |
-| Memoria IA | 2 slots por modelo — guarda solo si mejora |
-| Predicción | Top-3 números + Top-3 signos con confianza |
+| Entrenamiento | Algoritmo genético con paralelismo y early stopping |
+| Modos | `test` (2 iter, secuencial) / `prod` (15 gen × 8 ind, paralelo) |
+| Split de evaluación | **Temporal** (80% train / 20% test cronológico) |
+| Memoria IA | 2 slots por modelo — guarda solo si supera accuracy previo |
+| Predicción | Top-3 números + Top-3 signos con probabilidad conjunta |
 | Accuracy result | ~0.25 (modo prod, ASTRO LUNA) |
 | Accuracy series | ~0.14 (modo prod, ASTRO LUNA) |
 
@@ -43,24 +44,45 @@ convierte el problema en 4 clasificaciones de **10 clases cada una**, que es
 manejable con los datos disponibles. La predicción final se reconstruye
 combinando las probabilidades de cada dígito.
 
-### Por qué early stopping en modo prod
+### Por qué algoritmo genético en modo prod (no random search)
 
-El espacio de hiperparámetros de RF con las opciones del perfil `prod` tiene
-5 × 5 × 4 = 100 combinaciones posibles. Después de explorar ~40-50, la
-probabilidad de encontrar algo significativamente mejor es baja. El early
-stopping con `patience=20` evita desperdiciar tiempo en terreno ya explorado.
+A diferencia del random search (donde cada candidato es completamente independiente),
+el algoritmo genético **hereda y refina** los mejores hiperparámetros encontrados:
+
+- Ciclo por generación: evaluar en paralelo → ordenar → conservar 2 élite → cruzar top-50% + mutar
+- La mutación es **local** (paso ±1 en la lista de opciones), no un salto aleatorio
+- Early stop si no mejora el mejor global en 5 generaciones consecutivas
+
+Esto converge más rápido que el random search en el espacio de ~100 combinaciones posibles.
+
+### Por qué split temporal y no aleatorio
+
+**Implementado en la versión actual**: `training_simple.py` usa corte cronológico:
+
+```python
+split_idx = int(n * (1 - test_size))  # test_size = 0.20 en prod
+X_tr, X_te = X[:split_idx], X[split_idx:]
+```
+
+Los primeros 80% (registros más antiguos) son train set.
+Los últimos 20% (registros más recientes) son test set.
+
+Esto garantiza que el modelo nunca usa datos futuros para evaluar el rendimiento
+del pasado. Un split aleatorio podría usar datos del futuro para entrenar
+(ej. sorteo del 1 de mayo en train, pero del 15 de abril en test), lo que
+sobreestimaría la capacidad real del modelo.
 
 ### Por qué paralelismo con threads en vez de processes
 
-`joblib.Parallel(prefer="threads")` evita el overhead de serialización que
-tiene `prefer="processes"`. RandomForest libera el GIL durante el entrenamiento
-(opera en C/Cython), así que los threads sí corren en paralelo real en este caso.
+`joblib.Parallel(prefer="threads")` evita el overhead de serialización que tiene
+`prefer="processes"`. RandomForest libera el GIL durante el entrenamiento (opera
+en C/Cython), así que los threads sí corren en paralelo real en este caso.
 
 ---
 
 ## Señal estadística detectada en los datos
 
-Análisis sobre ASTRO LUNA (996 registros, oct 2023 – jul 2026):
+Análisis sobre ASTRO LUNA:
 
 | Métrica | Valor | Interpretación |
 |---|---|---|
@@ -79,67 +101,50 @@ sorteo, y viceversa. Esta señal se captura con las features `diff_1`, `diff_2`,
 
 ## Mejoras pendientes con mayor potencial
 
-### 1. Validación temporal cruzada
+### 1. Backtesting temporal real (PENDIENTE)
 
-Actualmente se usa un split aleatorio 80/20. El problema es que puede usar
-datos futuros para entrenar, lo que es irreal.
+Ver `Docs/Task_backtesting.md` para la especificación completa.
 
-La validación correcta para series temporales es `TimeSeriesSplit`:
+El entrenamiento ya usa un split temporal correcto. Lo que falta es la evaluación
+**sorteo por sorteo** sobre los últimos N sorteos (ventana deslizante), para medir
+el accuracy real que hubiera tenido el modelo en producción.
 
-```python
-from sklearn.model_selection import TimeSeriesSplit
+El script `scripts/backtesting.py` está especificado pero **no implementado**.
 
-tscv = TimeSeriesSplit(n_splits=5)
-scores = cross_val_score(modelo, X, y, cv=tscv, scoring="accuracy")
-# scores respetan el orden cronológico: siempre entrena con pasado, evalúa con futuro
-```
+### 2. GradientBoosting como clasificador alternativo
 
-Esto daría una estimación más honesta del accuracy real en producción.
-**Impacto esperado: accuracy reportado baja ~2-3%, pero es más confiable.**
+XGBoost y LightGBM **ya están en `requirements.txt`** y disponibles en
+`src/utils/mutation.py` (entrenamiento legacy). No están integrados en el
+pipeline principal `training_simple.py`.
 
-### 2. GradientBoosting como alternativa
+Para integrarlo: agregar XGB/LGBM como opción de clasificador base en el perfil
+`prod` de `config.py` y adaptar `_ModeloCompuesto` en `training_simple.py`.
 
-XGBoost o LightGBM suelen superar a RandomForest en datos tabulares con
-pocos registros. No cambian la estrategia de dígitos, solo el clasificador base:
-
-```python
-from xgboost import XGBClassifier
-
-modelo = XGBClassifier(
-    n_estimators=200,
-    max_depth=4,
-    learning_rate=0.05,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    use_label_encoder=False,
-    eval_metric="mlogloss"
-)
-```
-
-Para integrarlo hay que agregar `xgboost` a `requirements.txt` y añadirlo
-como opción en el perfil `prod` de `config.py`.
 **Impacto esperado: +2-5% accuracy.**
 
-### 3. Features de dígitos para lag2 y lag3
+### 3. Features de dígitos para lag4 y lag5
 
-Actualmente se extraen los 4 dígitos solo de `lag1`. Hacer lo mismo para
-`lag2` y `lag3` daría más contexto sobre patrones por posición de dígito.
-Ya está implementado en `feature_engineering.py` para lag1, lag2 y lag3.
+Actualmente se extraen los 4 dígitos de lag1, lag2 y lag3 (12 features en total).
+Extender a lag4 y lag5 añadiría 8 features más (total: 49 features).
 
-### 4. Detección de ciclos con autocorrelación
+**Requiere**: borrar y re-entrenar todos los modelos existentes en `IA_models/`.
+**Impacto estimado: +1-2% accuracy.**
 
-Si existiera algún ciclo periódico (ej. el dígito de unidades repite cada
-N sorteos), se podría detectar y usar como feature:
+### 4. Calibración de probabilidades
 
-```python
-from statsmodels.tsa.stattools import acf
+Las probabilidades del top-3 (ej. 18.33% para el primer candidato) pueden
+estar sobre-estimadas. `CalibratedClassifierCV` de sklearn alinea las
+probabilidades predichas con las frecuencias reales observadas.
 
-corrs = acf(df["result"], nlags=60)
-picos = [i for i, c in enumerate(corrs[1:], 1) if abs(c) > 0.15]
-```
+**Impacto**: confianza más realista para el usuario, útil para decidir cuántos
+números jugar. Sin impacto en el accuracy del top-1.
 
-Con los datos actuales no se detectaron ciclos significativos, pero puede
-cambiar a medida que se acumulen más registros.
+### 5. Ajuste de umbrales del sistema de alertas
+
+Los umbrales actuales de `alerts.py` (WARNING=0.60, CRITICAL=0.50) están
+pensados para modelos de alta precisión y siempre se disparan con el accuracy
+real del modelo (~0.25). Deberían ajustarse a valores realistas para este
+dominio (ej. WARNING=0.15, CRITICAL=0.10).
 
 ---
 
@@ -149,7 +154,7 @@ cambiar a medida que se acumulen más registros.
 |---|---|
 | Redes neuronales (LSTM) | ~1000 registros es insuficiente para entrenar una RNN útil |
 | Más ventanas rolling (14, 60 días) | Redundante con las ventanas 7 y 30 ya presentes |
-| Features del signo zodiacal para predecir el número | Número y signo son independientes según los datos |
+| Features de signo zodiacal para predecir el número | Número y signo son independientes |
 | Lags muy lejanos (lag_15, lag_20) | La señal decae rápido; lag_7 ya captura lo relevante |
 | Ciclos lunares / features astronómicas | No hay correlación estadística con los resultados |
 
@@ -157,11 +162,38 @@ cambiar a medida que se acumulen más registros.
 
 ## Límite teórico de accuracy
 
-Con una lotería bien diseñada y datos verdaderamente aleatorios, el límite
-teórico de accuracy para predecir el número exacto con ~909 clases es ~0.11%
-(azar puro). El sistema actual logra ~25%, lo que sugiere que **sí existen
-patrones explotables** en los datos, principalmente por la reversión a la media
-y la estructura de dígitos.
+Con datos verdaderamente aleatorios y ~909 clases, el azar puro da ~0.11%.
+El sistema actual logra ~25% con el split temporal, lo que confirma que
+**existen patrones explotables** en los datos, principalmente la reversión
+a la media y la estructura de dígitos.
+
+El backtesting real (sorteo a sorteo) podría dar una cifra diferente, posiblemente
+menor, ya que el split temporal de entrenamiento también puede tener pequeños
+efectos de memorización. Ver `Docs/Task_backtesting.md`.
 
 El límite práctico estimado con los datos disponibles es ~30-35% para result
-y ~20-25% para series, considerando el nivel de ruido inherente.
+y ~20-25% para series, considerando el nivel de ruido inherente del fenómeno.
+
+---
+
+## Sistema de alertas
+
+`src/utils/alerts.py` proporciona `AlertManager` con:
+
+- Verificación de accuracy y F1 contra umbrales configurables (WARNING/CRITICAL)
+- Salida a consola con símbolos visuales
+- Notificación opcional por email (SMTP con TLS, desactivado por defecto)
+- Historial en memoria de alertas de la sesión actual
+
+```env
+ALERT_ACCURACY_WARNING=0.6     # alerta si accuracy < 0.60
+ALERT_ACCURACY_CRITICAL=0.5    # alerta CRITICAL si accuracy < 0.50
+ALERT_EMAIL_ENABLED=false       # activar envío por email
+ALERT_SMTP_SERVER=smtp.gmail.com
+ALERT_EMAIL_SENDER=tu@email.com
+ALERT_EMAIL_RECIPIENTS=destinatario@email.com
+```
+
+**Nota**: los umbrales predeterminados (0.6 y 0.5) están por encima del accuracy
+real del modelo (~0.25), por lo que siempre disparan WARNING en cada entrenamiento.
+Ver mejora #5 arriba.

@@ -1,0 +1,7 @@
+{
+  "task_id": "task-lotery-improvements",
+  "task_description": "Apply T7–T22 improvements from Task_To_Do.md: fix index alignment, series encoding, double-sync, staleness warning, conn.close() safety, hardcoded lottery lists, os.environ mutation, dead imports, chronological split, baseline accuracy logging, documentation fixes, and dependency pinning. Three commits: (1) main.py logic + config, (2) training validation, (3) docs + deps.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

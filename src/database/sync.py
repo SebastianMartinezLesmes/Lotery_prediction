@@ -22,7 +22,10 @@ logger = LoggerManager.get_logger("neon_sync")
 LOTERIAS_DISPONIBLES = ["ASTRO SOL", "ASTRO LUNA"]
 
 
-def synchronize_database(filtro_loteria: Optional[str] = None) -> int:
+def synchronize_database(
+    filtro_loteria: Optional[str] = None,
+    repository: Optional[LotteriaRepository] = None,
+) -> int:
     """
     Orquesta la sincronización completa entre SuperAstro y Neon PostgreSQL.
 
@@ -33,6 +36,10 @@ def synchronize_database(filtro_loteria: Optional[str] = None) -> int:
     Args:
         filtro_loteria: Si se pasa, sólo sincroniza las loterías cuyo nombre
                         contenga ese texto (insensible a mayúsculas).
+        repository:     Instancia de LotteriaRepository ya conectada. Si no se
+                        pasa, se crea una nueva conexión interna. Pasar una
+                        instancia externa evita abrir múltiples conexiones cuando
+                        el llamador ya tiene una abierta (ej. sync_check.py).
 
     Returns:
         Total de registros insertados/actualizados en Neon.
@@ -65,12 +72,29 @@ def synchronize_database(filtro_loteria: Optional[str] = None) -> int:
     logger.info(f"Loterías a sincronizar: {loterias}")
 
     # ── Inicializar repositorio y scraper ────────────────────────────
+    # Si el llamador pasó un repositorio ya conectado, reutilizarlo.
+    # Si no, abrir una conexión propia y recordar cerrarla al final.
+    _conn_owned = False
+    if repository is None:
+        try:
+            conn       = NeonConnection()
+            repository = LotteriaRepository(conn)
+            _conn_owned = True
+        except Exception as e:
+            logger.error(f"Error inicializando conexión: {e}")
+            raise
+    else:
+        conn = None  # no cerramos lo que no abrimos
+
     try:
-        conn       = NeonConnection()
-        repository = LotteriaRepository(conn)
-        scraper    = SuperAstroScraper()
+        scraper = SuperAstroScraper()
     except Exception as e:
-        logger.error(f"Error inicializando componentes: {e}")
+        logger.error(f"Error inicializando scraper: {e}")
+        if _conn_owned and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
         raise
 
     # ── Sincronizar cada lotería ─────────────────────────────────────
@@ -98,11 +122,12 @@ def synchronize_database(filtro_loteria: Optional[str] = None) -> int:
     logger.info(f"Duración: {duracion:.2f}s")
     logger.info("=" * 70)
 
-    # ── Cerrar conexión ──────────────────────────────────────────────
-    try:
-        conn.close()
-    except Exception:
-        pass
+    # ── Cerrar conexión solo si fue abierta aquí ─────────────────────
+    if _conn_owned and conn is not None:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     # ── Propagar fallo si alguna lotería tuvo error ──────────────────
     fallidas = [l for l, v in metricas.items() if v == -1]

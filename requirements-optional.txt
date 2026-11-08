@@ -1,0 +1,11 @@
+# Dependencias opcionales — NO requeridas por el pipeline principal ni por CI.
+#
+# Instalar solo si se va a usar el scheduler local (scripts/scheduler.py):
+#   pip install -r requirements-optional.txt
+#
+# Versiones fijadas para reproducibilidad. Actualizar manualmente cuando sea
+# necesario tras verificar compatibilidad con el entorno.
+
+scikit-optimize==0.10.2
+schedule==1.2.2
+APScheduler==3.10.4
