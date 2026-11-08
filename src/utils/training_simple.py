@@ -100,7 +100,14 @@ def _evaluar_individuo(individuo, test_size,
     """
     Evalúa un individuo (dict de hiperparámetros) entrenando los 5 modelos.
     Pensado para ejecutarse en paralelo con joblib.
-    Retorna el individuo enriquecido con modelos y fitness.
+
+    Split cronológico de 3 bloques fijos (70 / 15 / 15):
+      - train : primeras 70 %  filas
+      - val   : siguientes 15 % filas  → fitness del algoritmo genético
+      - test  : últimas 15 %  filas   → métricas de evaluación (no usadas en fitness)
+
+    Retorna el individuo enriquecido con modelos, fitness (sobre val) y
+    acc_test_result / acc_test_series (sobre test, informativos).
     """
     seed  = individuo["seed"]
     n_est = individuo["n_estimators"]
@@ -108,27 +115,47 @@ def _evaluar_individuo(individuo, test_size,
     split = individuo["min_samples_split"]
 
     n = len(X)
-    split_idx = int(n * (1 - test_size))
-    X_tr, X_te       = X[:split_idx], X[split_idx:]
-    ym_tr, ym_te     = y_miles[:split_idx], y_miles[split_idx:]
-    yc_tr, yc_te     = y_centenas[:split_idx], y_centenas[split_idx:]
-    yd_tr, yd_te     = y_decenas[:split_idx], y_decenas[split_idx:]
-    yu_tr, yu_te     = y_unidades[:split_idx], y_unidades[split_idx:]
-    ys_tr, ys_te     = y_series[:split_idx], y_series[split_idx:]
+    n_test  = int(n * 0.15)
+    n_val   = int(n * 0.15)
+    n_train = n - n_val - n_test
 
-    m_m, acc_m = _entrenar_rf(X_tr, ym_tr, X_te, ym_te, n_est, depth, seed, split)
-    m_c, acc_c = _entrenar_rf(X_tr, yc_tr, X_te, yc_te, n_est, depth, seed, split)
-    m_d, acc_d = _entrenar_rf(X_tr, yd_tr, X_te, yd_te, n_est, depth, seed, split)
-    m_u, acc_u = _entrenar_rf(X_tr, yu_tr, X_te, yu_te, n_est, depth, seed, split)
-    m_s, acc_s = _entrenar_rf(X_tr, ys_tr, X_te, ys_te, n_est, depth, seed, split)
+    X_tr  = X[:n_train]
+    X_val = X[n_train:n_train + n_val]
+    X_te  = X[n_train + n_val:]
 
-    acc_result = (acc_m + acc_c + acc_d + acc_u) / 4
+    ym_tr,  ym_val,  ym_te  = y_miles[:n_train],    y_miles[n_train:n_train+n_val],    y_miles[n_train+n_val:]
+    yc_tr,  yc_val,  yc_te  = y_centenas[:n_train],  y_centenas[n_train:n_train+n_val],  y_centenas[n_train+n_val:]
+    yd_tr,  yd_val,  yd_te  = y_decenas[:n_train],   y_decenas[n_train:n_train+n_val],   y_decenas[n_train+n_val:]
+    yu_tr,  yu_val,  yu_te  = y_unidades[:n_train],  y_unidades[n_train:n_train+n_val],  y_unidades[n_train+n_val:]
+    ys_tr,  ys_val,  ys_te  = y_series[:n_train],    y_series[n_train:n_train+n_val],    y_series[n_train+n_val:]
+
+    # Entrenar sobre train, evaluar fitness sobre VAL (el genético optimiza en val)
+    m_m, acc_m_val = _entrenar_rf(X_tr, ym_tr, X_val, ym_val, n_est, depth, seed, split)
+    m_c, acc_c_val = _entrenar_rf(X_tr, yc_tr, X_val, yc_val, n_est, depth, seed, split)
+    m_d, acc_d_val = _entrenar_rf(X_tr, yd_tr, X_val, yd_val, n_est, depth, seed, split)
+    m_u, acc_u_val = _entrenar_rf(X_tr, yu_tr, X_val, yu_val, n_est, depth, seed, split)
+    m_s, acc_s_val = _entrenar_rf(X_tr, ys_tr, X_val, ys_val, n_est, depth, seed, split)
+
+    acc_result_val = (acc_m_val + acc_c_val + acc_d_val + acc_u_val) / 4
+
+    # Evaluar sobre TEST (solo informativo, no usados en fitness)
+    acc_m_te = accuracy_score(ym_te, m_m.predict(X_te))
+    acc_c_te = accuracy_score(yc_te, m_c.predict(X_te))
+    acc_d_te = accuracy_score(yd_te, m_d.predict(X_te))
+    acc_u_te = accuracy_score(yu_te, m_u.predict(X_te))
+    acc_s_te = accuracy_score(ys_te, m_s.predict(X_te))
+    acc_result_test = (acc_m_te + acc_c_te + acc_d_te + acc_u_te) / 4
 
     return {
         **individuo,
         "m_m": m_m, "m_c": m_c, "m_d": m_d, "m_u": m_u, "m_s": m_s,
-        "fitness_result": acc_result,
-        "fitness_series": acc_s,
+        "fitness_result":   acc_result_val,
+        "fitness_series":   acc_s_val,
+        "acc_test_result":  acc_result_test,
+        "acc_test_series":  acc_s_te,
+        # per-digit val accuracies (used in T7 baseline table)
+        "acc_m_te": acc_m_te, "acc_c_te": acc_c_te,
+        "acc_d_te": acc_d_te, "acc_u_te": acc_u_te,
     }
 
 
@@ -316,6 +343,10 @@ def entrenar_modelos_por_loteria(
             print(f"Iteraciones: {max_iter_test}  |  n_jobs: 1 (secuencial)")
             print("=" * 60)
 
+        # Track best individual (unused for now; per-digit test computed in final block)
+        mejor_res_individuo    = None
+        mejor_series_individuo = None
+
         for intento in range(1, max_iter_test + 1):
             ind = _individuo_aleatorio(rng, n_est_opts, depth_opts, split_opts)
             res = _evaluar_individuo(ind, test_size,
@@ -326,17 +357,21 @@ def entrenar_modelos_por_loteria(
                 mejor_acc_result    = res["fitness_result"]
                 mejor_modelo_result = _ModeloCompuesto(
                     res["m_m"], res["m_c"], res["m_d"], res["m_u"], X.shape[1])
+                mejor_res_individuo = res
                 marcas += " *result"
             if res["fitness_series"] > mejor_acc_series:
                 mejor_acc_series    = res["fitness_series"]
                 mejor_modelo_series = res["m_s"]
+                mejor_series_individuo = res
                 marcas += " *series"
             if verbose:
                 print(f"  [{intento}/{max_iter_test}] "
                       f"n_est={res['n_estimators']} "
                       f"depth={str(res['max_depth']):<4} | "
-                      f"result={res['fitness_result']:.4f} "
-                      f"series={res['fitness_series']:.4f}{marcas}")
+                      f"acc_val={res['fitness_result']:.4f} "
+                      f"acc_test={res['acc_test_result']:.4f} "
+                      f"series_val={res['fitness_series']:.4f} "
+                      f"series_test={res['acc_test_series']:.4f}{marcas}")
 
     # ─────────────────────────────────────────────────────────────────────
     # MODO PROD — algoritmo genético con paralelismo
@@ -361,6 +396,10 @@ def entrenar_modelos_por_loteria(
 
         rng        = np.random.default_rng()
         sin_mejora = 0
+
+        # Track best individual to extract per-digit test accuracies for T7
+        mejor_res_individuo    = None
+        mejor_series_individuo = None
 
         # Generación 0: población completamente aleatoria
         poblacion = [
@@ -389,10 +428,12 @@ def entrenar_modelos_por_loteria(
                     mejor_acc_result    = res["fitness_result"]
                     mejor_modelo_result = _ModeloCompuesto(
                         res["m_m"], res["m_c"], res["m_d"], res["m_u"], X.shape[1])
+                    mejor_res_individuo = res
                     hubo_mejora = True
                 if res["fitness_series"] > mejor_acc_series:
                     mejor_acc_series    = res["fitness_series"]
                     mejor_modelo_series = res["m_s"]
+                    mejor_series_individuo = res
                     hubo_mejora = True
                 mejor_gen_result = max(mejor_gen_result, res["fitness_result"])
                 mejor_gen_series = max(mejor_gen_result, res["fitness_series"])
@@ -439,18 +480,69 @@ def entrenar_modelos_por_loteria(
                     print(f"  -> Generacion {gen+1}: "
                           f"{elite} élite + {tam_poblacion-elite} hijos")
 
-    # ── Resultado final ───────────────────────────────────────────────────
-    if verbose:
-        print(f"\n  Mejor result acc : {mejor_acc_result:.4f}")
-        print(f"  Mejor series acc : {mejor_acc_series:.4f}")
-
-    # ── Baseline accuracy ─────────────────────────────────────────────────
+    # ── Resultado final (T6) ─────────────────────────────────────────────
+    # Calcular accuracy de test del mejor modelo sobre bloque test (70/15/15)
     from collections import Counter
-    baseline_result = max(Counter(y_result % 10).values()) / len(y_result)
-    baseline_series = max(Counter(y_series).values()) / len(y_series)
+
+    n = len(X)
+    n_test  = int(n * 0.15)
+    n_val   = int(n * 0.15)
+    n_train = n - n_val - n_test
+
+    X_te_final = X[n_train + n_val:]
+    ym_te_final = y_miles[n_train + n_val:]
+    yc_te_final = y_centenas[n_train + n_val:]
+    yd_te_final = y_decenas[n_train + n_val:]
+    yu_te_final = y_unidades[n_train + n_val:]
+    ys_te_final = y_series[n_train + n_val:]
+
+    # Per-digit test accuracies for the best result model
+    if mejor_modelo_result is not None:
+        acc_miles_test    = accuracy_score(ym_te_final, mejor_modelo_result.miles.predict(X_te_final))
+        acc_cent_test     = accuracy_score(yc_te_final, mejor_modelo_result.centenas.predict(X_te_final))
+        acc_dec_test      = accuracy_score(yd_te_final, mejor_modelo_result.decenas.predict(X_te_final))
+        acc_uni_test      = accuracy_score(yu_te_final, mejor_modelo_result.unidades.predict(X_te_final))
+        accuracy_test_result = (acc_miles_test + acc_cent_test + acc_dec_test + acc_uni_test) / 4
+    else:
+        acc_miles_test = acc_cent_test = acc_dec_test = acc_uni_test = 0.0
+        accuracy_test_result = 0.0
+
+    if mejor_modelo_series is not None:
+        acc_series_test      = accuracy_score(ys_te_final, mejor_modelo_series.predict(X_te_final))
+        accuracy_test_series = acc_series_test
+    else:
+        acc_series_test      = 0.0
+        accuracy_test_series = 0.0
+
+    # accuracy_val comes from the fitness (optimized over validation block)
+    accuracy_val_result = mejor_acc_result
+    accuracy_val_series = mejor_acc_series
+
     if verbose:
-        print(f"  Modelo result: {mejor_acc_result:.2%} | Línea base: {baseline_result:.2%}")
-        print(f"  Modelo series: {mejor_acc_series:.2%} | Línea base: {baseline_series:.2%}")
+        print(f"\n  Mejor result acc_val : {accuracy_val_result:.4f}  |  acc_test: {accuracy_test_result:.4f}")
+        print(f"  Mejor series acc_val : {accuracy_val_series:.4f}  |  acc_test: {accuracy_test_series:.4f}")
+
+    # ── Líneas base sobre bloque TEST (T7) ───────────────────────────────
+    y_miles_te    = (y_result[n_train + n_val:] // 1000) % 10
+    y_centenas_te = (y_result[n_train + n_val:] // 100)  % 10
+    y_decenas_te  = (y_result[n_train + n_val:] // 10)   % 10
+    y_unidades_te =  y_result[n_train + n_val:] % 10
+    y_series_te   =  y_series[n_train + n_val:]
+
+    base_miles    = max(Counter(y_miles_te).values())    / len(y_miles_te)
+    base_centenas = max(Counter(y_centenas_te).values()) / len(y_centenas_te)
+    base_decenas  = max(Counter(y_decenas_te).values())  / len(y_decenas_te)
+    base_unidades = max(Counter(y_unidades_te).values()) / len(y_unidades_te)
+    base_series   = max(Counter(y_series_te).values())   / len(y_series_te)
+
+    if verbose:
+        print(f"\n=== LÍNEAS BASE (bloque test) ===")
+        print(f"  {'Target':<12} {'Modelo':>10} {'Azar':>10} {'Más_frecuente':>15}")
+        print(f"  {'Miles':<12} {acc_miles_test:>10.2%} {'10.00%':>10} {base_miles:>15.2%}")
+        print(f"  {'Centenas':<12} {acc_cent_test:>10.2%} {'10.00%':>10} {base_centenas:>15.2%}")
+        print(f"  {'Decenas':<12} {acc_dec_test:>10.2%} {'10.00%':>10} {base_decenas:>15.2%}")
+        print(f"  {'Unidades':<12} {acc_uni_test:>10.2%} {'10.00%':>10} {base_unidades:>15.2%}")
+        print(f"  {'Signo':<12} {acc_series_test:>10.2%} {'8.33%':>10} {base_series:>15.2%}")
 
     # ── Guardar en memoria IA ─────────────────────────────────────────────
     print("\n🧠 Guardando en memoria IA:")
@@ -458,20 +550,24 @@ def entrenar_modelos_por_loteria(
         nombre_loteria=nombre_loteria,
         tipo_modelo="result",
         modelo=mejor_modelo_result,
-        accuracy=mejor_acc_result,
+        accuracy=accuracy_val_result,
         n_records=len(X),
+        accuracy_val=accuracy_val_result,
+        accuracy_test=accuracy_test_result,
     )
     guardar_modelo_si_mejora(
         nombre_loteria=nombre_loteria,
         tipo_modelo="series",
         modelo=mejor_modelo_series,
-        accuracy=mejor_acc_series,
+        accuracy=accuracy_val_series,
         n_records=len(X),
+        accuracy_val=accuracy_val_series,
+        accuracy_test=accuracy_test_series,
     )
 
     if verbose:
         print(f"\n[OK] Entrenamiento completado")
-        print(f"   Mejor result acc: {mejor_acc_result:.4f}")
-        print(f"   Mejor series acc: {mejor_acc_series:.4f}")
+        print(f"   Mejor result acc_val: {accuracy_val_result:.4f}  acc_test: {accuracy_test_result:.4f}")
+        print(f"   Mejor series acc_val: {accuracy_val_series:.4f}  acc_test: {accuracy_test_series:.4f}")
 
     return mejor_modelo_result, mejor_modelo_series

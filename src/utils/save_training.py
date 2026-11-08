@@ -65,6 +65,8 @@ def guardar_modelo_si_mejora(
     accuracy: float,
     f1_score: float = None,
     n_records: int = None,
+    accuracy_val: float = None,
+    accuracy_test: float = None,
 ) -> bool:
     """
     Guarda el modelo en el slot de menor accuracy si el nuevo lo supera.
@@ -107,6 +109,8 @@ def guardar_modelo_si_mejora(
         payload = {
             "model":          modelo,
             "accuracy":       float(accuracy),
+            "accuracy_val":   float(accuracy_val) if accuracy_val is not None else None,
+            "accuracy_test":  float(accuracy_test) if accuracy_test is not None else None,
             "f1_score":       float(f1_score) if f1_score is not None else None,
             "algoritmo":      tipo_algo,
             "n_features":     getattr(modelo, "n_features_in_", len(FEATURE_COLUMNS)),
