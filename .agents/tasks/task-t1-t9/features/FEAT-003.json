@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Agregar split de 3 bloques cronológicos en training_simple.py (T6) y calcular líneas base correctas por dígito y signo sobre el bloque de test (T7). T7 depende de T6 porque necesita el bloque test separado. Depende de FEAT-001 (features corregidas) pero puede ejecutarse independientemente de FEAT-002 (el re-entrenamiento de verificación) — sin embargo, el orden del workflow es FEAT-002 primero para no complicar el commit de re-entrenamiento. Independiente de FEAT-004.",
+  "status": "completed",
+  "steps": [
+    "T6 — En src/utils/training_simple.py, función _evaluar_individuo: reemplazar el split de 2 bloques (split_idx = int(n * (1 - test_size))) con un split de 3 bloques. El split actual usa 'test_size' de config (0.3 en modo test, 0.2 en modo prod). El nuevo split: n_test = int(n * 0.15); n_val = int(n * 0.15); n_train = n - n_val - n_test. Bloques: X_tr = X[:n_train], X_val = X[n_train:n_train+n_val], X_te = X[n_train+n_val:]. Aplicar el mismo corte a y_miles, y_centenas, y_decenas, y_unidades, y_series.",
+    "T6 — En _evaluar_individuo: entrenar con X_tr/y_*_tr, evaluar fitness en X_val/y_*_val (el algoritmo genético optimiza sobre validación, NO sobre test). El fitness devuelto en 'fitness_result' y 'fitness_series' debe ser el accuracy sobre validación. Añadir también 'acc_test_result' y 'acc_test_series' calculados sobre X_te pero NO usar estos en el fitness del genético.",
+    "T6 — En entrenar_modelos_por_loteria, al finalizar la búsqueda (sección '# ── Resultado final'): calcular la accuracy de test del mejor modelo una sola vez. El mejor modelo es el que tiene mayor fitness_result (sobre validación). Añadir: model_final = mejor_modelo_result; si model_final existe, predecir sobre X_te (que necesita estar disponible en scope). Problema: X_te no está disponible fuera de _evaluar_individuo. Solución: hacer que _evaluar_individuo devuelva también las predicciones en test, o calcular el test split aquí. Enfoque preferido: repetir el split en entrenar_modelos_por_loteria con los mismos porcentajes (n_test=int(n*0.15), n_val=int(n*0.15)), calcular X_te final y evaluar el mejor modelo una sola vez. Almacenar accuracy_val y accuracy_test por separado.",
+    "T6 — En guardar_modelo_si_mejora (save_training.py): añadir parámetros opcionales accuracy_val=None, accuracy_test=None al payload del .pkl: 'accuracy_val': accuracy_val, 'accuracy_test': accuracy_test. Actualizar la llamada en entrenar_modelos_por_loteria para pasar estos valores. Files: src/utils/training_simple.py, src/utils/save_training.py",
+    "T7 — En entrenar_modelos_por_loteria, sección de línea base (ya existe un bloque 'baseline' al final), reemplazar el cálculo actual por líneas base correctas sobre el bloque TEST (no todo y_result). Para cada dígito (miles, centenas, decenas, unidades): calcular azar=10% y clase más frecuente. Para signo: azar=8.33% y clase más frecuente. Obtener los dígitos del bloque test: y_miles_te, y_centenas_te, y_decenas_te, y_unidades_te, y_series_te. Calcular: from collections import Counter; base_miles = max(Counter(y_miles_te).values()) / len(y_miles_te); etc.",
+    "T7 — Imprimir la tabla de resultados:\n  print('=== LÍNEAS BASE (bloque test) ===')\n  print(f'  Miles    : modelo={acc_miles_test:.2%} | azar=10.00% | más_frecuente={base_miles:.2%}')\n  print(f'  Centenas : modelo={acc_cent_test:.2%} | azar=10.00% | más_frecuente={base_cent:.2%}')\n  print(f'  Decenas  : modelo={acc_dec_test:.2%} | azar=10.00% | más_frecuente={base_dec:.2%}')\n  print(f'  Unidades : modelo={acc_uni_test:.2%} | azar=10.00% | más_frecuente={base_uni:.2%}')\n  print(f'  Signo    : modelo={acc_series_test:.2%} | azar=8.33% | más_frecuente={base_series:.2%}')\n  Files: src/utils/training_simple.py, src/utils/save_training.py",
+    "Commit T6: git add src/utils/training_simple.py src/utils/save_training.py; git commit -m 'feat: T6 three-block chronological split (train 70/val 15/test 15)'",
+    "Commit T7: git add src/utils/training_simple.py; git commit -m 'feat: T7 correct baseline metrics per digit and sign on test block'"
+  ],
+  "acceptance_criteria": [
+    "python -c \"from src.utils.training_simple import entrenar_modelos_por_loteria\" no produce errores",
+    "python main.py --entrenar --modo test muestra la tabla '=== LÍNEAS BASE (bloque test) ===' con 4 dígitos y signo",
+    "Los .pkl guardados tienen claves 'accuracy_val' y 'accuracy_test' separadas en el payload",
+    "El log del entrenamiento muestra 'acc_val' y 'acc_test' para result y series"
+  ],
+  "verification": [
+    "python -c \"from src.utils.training_simple import entrenar_modelos_por_loteria\"",
+    "python main.py --entrenar --modo test",
+    "python -c \"import joblib, os; p = next(f for f in os.listdir('IA_models') if f.endswith('.pkl')); d = joblib.load('IA_models/' + p); print('accuracy_val' in d, 'accuracy_test' in d)\""
+  ],
+  "blocked_reason": null,
+  "findings": "T6 and T7 implemented together in a single commit (feat: T6 three-block chronological split train70/val15/test15, bd3c0b4). Both changes are in src/utils/training_simple.py so the T7 commit was a no-op — all baseline logic was included in the T6 commit. _evaluar_individuo now uses 3-block split (70/15/15) with fitness on validation; acc_test_result and acc_test_series are computed over the test block but not used in fitness. guardar_modelo_si_mejora now stores accuracy_val and accuracy_test in the payload. Baseline table (=== LÍNEAS BASE (bloque test) ===) is printed comparing model vs azar vs más_frecuente for miles/centenas/decenas/unidades/signo on the test block. All acceptance criteria verified: import ok, training completes, baseline table printed, pkl files 2_astro_luna_result.pkl and 2_astro_luna_series.pkl contain accuracy_val and accuracy_test keys."
+}
