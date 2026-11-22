@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Corregir la fuga de datos en feature_engineering.py (T1), crear tests anti-fuga (T2), alinear objetivo y features en main.py (T3), corregir prediction.py para predecir el siguiente sorteo (T4), e invalidar modelos .pkl contaminados (T5). Estas 5 tareas forman una unidad: T2 verifica T1, T3 y T4 dependen de features_para_proximo_sorteo (nueva función de T1), y T5 limpia los modelos entrenados con el código defectuoso. Independiente de FEAT-003 y FEAT-004.",
+  "status": "completed",
+  "steps": [
+    "T1 — Reemplazar completamente src/features/feature_engineering.py con el código corregido del bloque Python al final de Docs/Task_To_Do.md. El código nuevo: (a) aplica .shift(1) a todos los estadísticos de ventana para garantizar que la fila i solo usa r[0..i-1]; (b) renombra freq_10/30/90 a freq_lag1_10/30/90; (c) usa -1 para 'nunca visto' en dias_desde_ultimo; (d) añade parámetro eliminar_incompletas=True que descarta las primeras 7 filas (MIN_HISTORIAL=7); (e) añade la función features_para_proximo_sorteo(df, fecha_proxima). Copiar el bloque Python exacto del documento — no parafrasear.",
+    "T1 verificación interna: confirmar que len(FEATURE_COLUMNS) == 41 y que el módulo importa: python -c \"from src.features.feature_engineering import generar_features, features_para_proximo_sorteo, FEATURE_COLUMNS; print(len(FEATURE_COLUMNS))\"",
+    "T2 — Instalar pytest: pip install pytest. Crear directorio tests/ si no existe. Crear tests/__init__.py vacío. Crear tests/test_no_leakage.py copiando exactamente el bloque de pruebas del final de Docs/Task_To_Do.md (las 4 funciones: test_cambiar_resultado_i_no_altera_features_hasta_i, test_el_futuro_si_cambia, test_proximo_sorteo_usa_solo_conocidos, test_columnas_y_alineacion). Añadir pytest a requirements.txt como 'pytest>=7.0.0' en sección de dev.",
+    "T2 verificación: python -m pytest tests/ -q — deben pasar exactamente 4 pruebas.",
+    "T3 — En main.py, función ejecutar_entrenamiento: (a) asegurarse de que df_loteria está ordenado por fecha con reset_index(drop=True) ANTES de llamar a generar_features (ya existe la línea sort_values); (b) cambiar 'X_df = X_df.replace([np.inf, -np.inf], np.nan).dropna()' — eliminar el .dropna() ya que eliminar_incompletas=True en generar_features ya filtra las filas incompletas; (c) confirmar que la alineación ya usa df_loteria = df_loteria.loc[X_df.index] (esta línea ya existe del commit anterior). Si el dropna() elimina filas DESPUÉS de generar_features, reemplazar esa línea por: X_df = X_df.replace([np.inf, -np.inf], np.nan) sin .dropna(); luego los targets ya están alineados por índice. Files: main.py",
+    "T4 — En src/utils/prediction.py, función predecir_para_loteria: reemplazar la línea 'features = X_train_df.tail(1).values' con el siguiente bloque:\n  ultima_fecha = df_loteria['fecha'].max()\n  fecha_proxima = ultima_fecha + pd.Timedelta(days=1)\n  from src.features.feature_engineering import features_para_proximo_sorteo\n  features = features_para_proximo_sorteo(df_loteria, fecha_proxima).values\nEliminar también la variable X_train_df (y su generación via generar_features) si ya no se usa para ningún otro propósito en la función (verificar — actualmente también se usa para df_loteria = df_loteria.loc[X_train_df.index] y para y_result/y_series). Si X_train_df sigue siendo necesaria para calcular y_result/y_series, mantenerla pero reemplazar solo la línea de features. Files: src/utils/prediction.py",
+    "T5 — (a) Borrar los 4 .pkl existentes en IA_models/: 1_astro_luna_result.pkl, 1_astro_luna_series.pkl, 2_astro_luna_result.pkl, 2_astro_luna_series.pkl. (b) En src/utils/save_training.py, en la función guardar_modelo_si_mejora, añadir un chequeo al cargar un payload existente: si payload.get('feature_names') != FEATURE_COLUMNS, imprimir un aviso 'Modelo obsoleto ignorado (feature_names no coincide)' y tratarlo como si no existiera (acc_existente = 0). (c) En src/utils/prediction.py, en la función buscar_mejor_modelo, si no se encuentra ningún .pkl para la lotería, ya existe el mensaje 'No se encontraron modelos entrenados'; verificar que ese mensaje es claro. Files: IA_models/*.pkl (borrar), src/utils/save_training.py",
+    "Commit T1-T5: git add src/features/feature_engineering.py tests/ main.py src/utils/prediction.py src/utils/save_training.py requirements.txt; git commit -m 'fix: T1-T5 data leakage correction, anti-leakage tests, alignment and model invalidation'. Nota: los .pkl borrados se rastrean con git rm. Ejecutar: git rm IA_models/1_astro_luna_result.pkl IA_models/1_astro_luna_series.pkl IA_models/2_astro_luna_result.pkl IA_models/2_astro_luna_series.pkl"
+  ],
+  "acceptance_criteria": [
+    "python -c \"from src.features.feature_engineering import generar_features, features_para_proximo_sorteo, FEATURE_COLUMNS; print(len(FEATURE_COLUMNS))\" imprime 41",
+    "python -m pytest tests/ -q pasa exactamente 4 pruebas (0 fallos, 0 errores)",
+    "python -c \"import main\" no produce errores",
+    "python -c \"from src.utils.prediction import predecir_para_loteria\" no produce errores de importación",
+    "No existe ningún archivo .pkl en IA_models/ (Get-ChildItem IA_models -Filter *.pkl no devuelve nada o solo .gitkeep)",
+    "python main.py --predecir muestra mensaje claro de 'No se encontraron modelos entrenados' sin excepción"
+  ],
+  "verification": [
+    "python -c \"from src.features.feature_engineering import generar_features, features_para_proximo_sorteo, FEATURE_COLUMNS; print(len(FEATURE_COLUMNS))\"",
+    "python -m pytest tests/ -q",
+    "python -c \"import main\"",
+    "python main.py --predecir --modo test"
+  ],
+  "blocked_reason": null,
+  "findings": "All 5 tasks completed. Pre-existing Windows charmap encoding crashes in prediction.py and main.py (emoji in print statements) were blocking the --predecir acceptance criterion; fixed as part of T5. The 4 .pkl files were not git-tracked (in .gitignore) so they were deleted directly from the filesystem rather than via git rm."
+}

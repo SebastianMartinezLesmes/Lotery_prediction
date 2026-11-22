@@ -1,0 +1,26 @@
+{
+  "project_type": "Python ML CLI — lottery prediction (ASTRO SOL / ASTRO LUNA) with RandomForest + genetic algorithm, Neon PostgreSQL sync",
+  "language": "Python 3.13.2",
+  "build_system": "No build step. Direct python execution. Entry point: main.py",
+  "test_framework": "pytest — NOT currently installed. Must be installed with 'pip install pytest' before T2. No test suite exists yet.",
+  "build_command": "python -c \"import main\"",
+  "test_command": "python -m pytest tests/ -q",
+  "verification_instructions": "1. python -c 'import main' — must succeed. 2. python -c 'from src.features.feature_engineering import generar_features, features_para_proximo_sorteo, FEATURE_COLUMNS; print(len(FEATURE_COLUMNS))' — must print 41. 3. python -m pytest tests/ -q — 4 tests pass. 4. python main.py --entrenar --modo test — completes without error.",
+  "snapshot_or_generated_files": null,
+  "environment_constraints": "Windows PowerShell — use semicolons (;) NOT && to chain commands. Currently on branch master (HEAD -> master, origin/master). Never push. Use 'git add <specific files>' only. Always --modo test, never prod. Scripts must work without Neon (Excel fallback via data/resultados_astro.xlsx).",
+  "contribution_requirements": "One commit per task group as specified: T1, T2, T3, T4, T5, re-entrenar, T6, T7, T8, T9. English commit messages. Do NOT change the RandomForest/genetic algorithm. Do NOT delete Neon data. Always --modo test.",
+  "key_patterns": "settings imported as 'from src.core.config import settings'. FEATURE_COLUMNS defined in src/features/feature_engineering.py (currently 41 columns, old buggy version). generar_features() currently has data leakage — T1 replaces the full file. features_para_proximo_sorteo() is a NEW function added by T1 (does not exist yet). training_simple.py uses a 2-block chronological split (split_idx = int(n*(1-test_size))). guardar_modelo_si_mejora() in save_training.py saves payload with 'feature_names' key. Excel fallback: data/resultados_astro.xlsx with columns [fecha, lottery, result, series].",
+  "relevant_files": [
+    "src/features/feature_engineering.py",
+    "main.py",
+    "src/utils/prediction.py",
+    "src/utils/training_simple.py",
+    "src/utils/save_training.py",
+    "src/core/config.py",
+    "Docs/Task_To_Do.md",
+    "Docs/Task_backtesting.md",
+    "data/resultados_astro.xlsx",
+    "requirements.txt"
+  ],
+  "directory_structure": "main.py (CLI entry, ejecutar_entrenamiento function), src/core/config.py (Settings class + _TRAINING_PROFILES for test/prod), src/features/feature_engineering.py (FEATURE_COLUMNS + generar_features — REPLACE entirely in T1), src/utils/training_simple.py (_evaluar_individuo with 2-block split, entrenar_modelos_por_loteria), src/utils/prediction.py (predecir_para_loteria uses X_train_df.tail(1)), src/utils/save_training.py (guardar_modelo_si_mejora with feature_names in payload), IA_models/ (4 .pkl files: 1_astro_luna_result.pkl, 1_astro_luna_series.pkl, 2_astro_luna_result.pkl, 2_astro_luna_series.pkl — must be deleted in T5), data/ (resultados_astro.xlsx, results.json), tests/ (does NOT exist — create in T2), scripts/ (migrar_a_neon.py, scheduler.py, setup_entorno.py, sync_check.py)"
+}

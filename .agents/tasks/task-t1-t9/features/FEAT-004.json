@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Crear scripts/permutation_test.py (T8) y scripts/backtesting.py (T9). Ambos son scripts independientes que no modifican ningún módulo existente — solo importan y reutilizan el pipeline. T8 depende de FEAT-003 (usa el split 3-bloques de training_simple.py). T9 es independiente de T8 pero ambos se implementan juntos para eficiencia. Depende de FEAT-001 (features_para_proximo_sorteo), FEAT-003 (entrenar_modelos_por_loteria). Independiente de FEAT-002 en cuanto a código, pero se ejecuta después de todos los demás para que los scripts funcionen sobre modelos entrenados.",
+  "status": "pending",
+  "steps": [
+    "T8 — Crear scripts/permutation_test.py. Lógica: (1) Cargar datos desde Excel fallback (data/resultados_astro.xlsx) o Neon. (2) Filtrar la lotería con argparse --lottery (default 'ASTRO LUNA'). (3) Usar el mismo split de 3 bloques que FEAT-003: n_test=int(n*0.15), n_val=int(n*0.15), n_train=n-n_val-n_test. (4) Llamar a entrenar_modelos_por_loteria con X_train, y_result_train, y_series_train en modo test para obtener el modelo real. (5) Calcular accuracy real en bloque test para cada dígito y signo. (6) Repetir 30 veces: barajar y_result y y_series del bloque TRAIN (no el test), re-entrenar, evaluar en test, registrar accuracy barajada. (7) Calcular p-valor = proporción de runs barajados con accuracy >= accuracy real. (8) Imprimir tabla: dígito | acc_real | mean_shuffled | p_valor. CLI: argparse con --lottery (default 'ASTRO LUNA'). Funciona sin Neon usando Excel.",
+    "T8 — Detalle de la tabla de salida:\n  print('=== PERMUTATION TEST (30 runs) ===')\n  print(f'  {'Target':<12} {'Acc_Real':>10} {'Mean_Shuffled':>15} {'p-valor':>10}')\n  for target, acc_real, mean_shuf, pval in resultados:\n      señal = '** señal' if pval < 0.05 else '(sin señal)'\n      print(f'  {target:<12} {acc_real:>10.2%} {mean_shuf:>15.2%} {pval:>10.3f}  {señal}')\n  Targets: 'Miles', 'Centenas', 'Decenas', 'Unidades', 'Signo'",
+    "T8 — Commit: git add scripts/permutation_test.py; git commit -m 'feat: T8 permutation test script with 30 shuffled runs'",
+    "T9 — Crear scripts/backtesting.py siguiendo exactamente el algoritmo de Docs/Task_backtesting.md. Estructura: (1) argparse: --lottery (default 'ASTRO LUNA'), --ventana (default 100), --reentrenar (int, opcional), --solo-evaluar (flag). (2) Cargar datos desde Neon o fallback Excel. (3) Separar df_train_base = df.iloc[:-ventana] y df_test = df.iloc[-ventana:]. (4) Entrenamiento inicial con --modo test (n_jobs=1). (5) Loop sobre df_test sorteo por sorteo: acumular historial, generar features usando X_df = generar_features(df_acumulado); features = X_df.tail(1).values (en este contexto NO usar features_para_proximo_sorteo porque backtesting evalúa el sorteo YA conocido, no el próximo). (6) Predecir top3_numeros y top3_signos. (7) Registrar métricas en lista resultados[].",
+    "T9 — Paso 4 métricas: calcular y mostrar la tabla de Docs/Task_backtesting.md: acierto exacto, real_en_top3, acierto signo, acc por dígito, mejora_vs_azar, mejora_vs_lag1. Añadir intervalo de confianza: ±1.96*sqrt(p*(1-p)/N) para cada métrica proporcional. (8) Guardar data/backtesting_results.csv con df_res.to_csv. Los modelos de backtesting se guardan con slot 'loteria + _backtest' para no sobrescribir modelos de producción.",
+    "T9 — Importaciones clave del script:\n  import argparse, pandas as pd, numpy as np\n  from src.features.feature_engineering import generar_features, FEATURE_COLUMNS\n  from src.utils.training_simple import entrenar_modelos_por_loteria, _ModeloCompuesto\n  from src.core.config import settings\n  Para cargar modelos post-entrenamiento: usar buscar_mejor_modelo de src/utils/prediction.py (importar la función directamente).",
+    "T9 — Modo --reentrenar N: re-entrenar cada N sorteos nuevos. Modo --solo-evaluar: cargar modelos existentes sin re-entrenar (buscar_mejor_modelo con sufijo _backtest). Modo default: entrenamiento inicial + sin re-entrenamiento periódico.",
+    "T9 — Commit: git add scripts/backtesting.py data/backtesting_results.csv; git commit -m 'feat: T9 backtesting script with expanding window evaluation'"
+  ],
+  "acceptance_criteria": [
+    "python scripts/permutation_test.py --lottery \"ASTRO LUNA\" imprime la tabla con 5 targets (Miles, Centenas, Decenas, Unidades, Signo) y p-valores",
+    "python scripts/backtesting.py --lottery \"ASTRO LUNA\" --ventana 100 completa y guarda data/backtesting_results.csv",
+    "data/backtesting_results.csv existe con columnas: fecha, real_result, pred_top1, real_en_top3, real_series, series_ok, miles_ok, centenas_ok, decenas_ok, unidades_ok",
+    "Ambos scripts funcionan sin conexión a Neon (usando data/resultados_astro.xlsx como fallback)",
+    "python -c \"import scripts.permutation_test\" no falla con SyntaxError o ImportError crítico"
+  ],
+  "verification": [
+    "python scripts/permutation_test.py --lottery \"ASTRO LUNA\"",
+    "python scripts/backtesting.py --lottery \"ASTRO LUNA\" --ventana 100",
+    "python -c \"import pandas as pd; df = pd.read_csv('data/backtesting_results.csv'); print(df.columns.tolist()); print(len(df))\""
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

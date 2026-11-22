@@ -1,0 +1,7 @@
+{
+  "task_id": "task-t1-t9",
+  "task_description": "Corregir fuga de datos en feature_engineering.py, añadir pruebas anti-fuga, realinear entrenamiento y predicción, invalidar modelos contaminados, agregar split de 3 bloques cronológicos, líneas base correctas, script de prueba de permutación y script de backtesting.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}

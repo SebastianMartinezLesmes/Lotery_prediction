@@ -2,8 +2,7 @@ name: Auto_Neon_Sync
 
 on:
   schedule:
-    # Diario a las 12:00 UTC — incremental e idempotente: si la DB ya está
-    # al día retorna 0 registros sin error.
+    # Diario a las 12:00 UTC — incremental e idempotente.
     - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
@@ -12,13 +11,24 @@ on:
         required: false
         default: ''
 
+# Evita dos ejecuciones simultáneas (por ejemplo, manual + programada)
+concurrency:
+  group: neon-sync
+  cancel-in-progress: false
+
 jobs:
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 1 — Sincronizar la base de datos Neon
+  # Si este job está en verde, Neon quedó actualizada.
+  # ════════════════════════════════════════════════════════════════════
   sync:
     name: Actualizar base de datos Neon
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write   # necesario para push a dev y me
+      contents: read          # este job no necesita escribir en el repositorio
+    outputs:
+      total_registros: ${{ steps.sync.outputs.total_registros }}
 
     steps:
       - name: Checkout repositorio
@@ -28,14 +38,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Cache de dependencias pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Instalar dependencias
         run: pip install -r requirements.txt
@@ -46,78 +50,162 @@ jobs:
           DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           FILTRO: ${{ github.event.inputs.filtro_loteria }}
         run: |
-          set -euo pipefail
-          python scripts/sync_check.py > /tmp/sync_output.txt 2>&1
-          EXIT_CODE=$?
-          cat /tmp/sync_output.txt
-          TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | cut -d= -f2 || echo "0")
-          echo "total_registros=${TOTAL}" >> "$GITHUB_OUTPUT"
-          exit $EXIT_CODE
+          set -uo pipefail
 
-      # ── Propagar master → dev y me ─────────────────────────────────
-      - name: Sincronizar ramas dev y me con master
-        if: success()
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # tee muestra el log en vivo y lo guarda; PIPESTATUS conserva el
+          # código de salida real de Python (no el de tee).
+          python scripts/sync_check.py 2>&1 | tee /tmp/sync_output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
 
-          # Asegura que tenemos el historial completo de las 3 ramas
-          git fetch origin dev me master
+          TOTAL=$(grep 'TOTAL_REGISTROS=' /tmp/sync_output.txt | tail -1 | cut -d= -f2 || true)
+          echo "total_registros=${TOTAL:-0}" >> "$GITHUB_OUTPUT"
 
-          # ── dev ──────────────────────────────────────────────────────
-          git checkout dev
-          git merge origin/master --ff-only --no-edit \
-            || git merge origin/master --no-edit -m "chore: sync dev with master [skip ci]"
-          git push origin dev
+          exit "$EXIT_CODE"
 
-          # ── me ───────────────────────────────────────────────────────
-          git checkout me
-          git merge origin/master --ff-only --no-edit \
-            || git merge origin/master --no-edit -m "chore: sync me with master [skip ci]"
-          git push origin me
-
-      # ── Resumen éxito ───────────────────────────────────────────────
       - name: Resumen — éxito
         if: success()
+        env:
+          FILTRO_TXT: ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }}
+          TOTAL: ${{ steps.sync.outputs.total_registros || '0' }}
+          TRIGGER: ${{ github.event_name }}
         run: |
-          echo "## ✅ Sincronización Neon — $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Registros nuevos | ${{ steps.sync.outputs.total_registros || '0' }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Filtro | ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Trigger | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f /tmp/sync_output.txt ]; then
-            echo "### Fechas máximas por lotería" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep -E '(ASTRO|Lotería|-----)' /tmp/sync_output.txt >> "$GITHUB_STEP_SUMMARY" || true
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "## ✅ Sincronización Neon — $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|-------|-------|"
+            echo "| Registros nuevos | ${TOTAL} |"
+            echo "| Filtro | ${FILTRO_TXT} |"
+            echo "| Trigger | ${TRIGGER} |"
+            echo ""
+            if [ -f /tmp/sync_output.txt ]; then
+              echo "### Fechas máximas por lotería"
+              echo '```'
+              grep -E '(ASTRO|Lotería|-----)' /tmp/sync_output.txt || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      # ── Resumen fallo ───────────────────────────────────────────────
       - name: Resumen — fallo
         if: failure()
+        env:
+          FILTRO_TXT: ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }}
+          TRIGGER: ${{ github.event_name }}
         run: |
-          echo "## ❌ Sincronización Neon FALLIDA — $(date -u '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Filtro | ${{ github.event.inputs.filtro_loteria || 'Todas las loterías' }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Trigger | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Causas posibles" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Secret ausente o expirado**: verificar \`NEON_DATABASE_URL\` en Settings → Secrets." >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Sitio superastro.com.co cambió su layout**: el scraper no encontró la tabla esperada." >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Timeout de conexión a Neon**: el servicio tardó más de 15 s (3 reintentos agotados)." >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Últimas 40 líneas del log" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f /tmp/sync_output.txt ]; then
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -40 /tmp/sync_output.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "_No se generó output — el fallo ocurrió antes de que el script arrancara._" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## ❌ Sincronización Neon FALLIDA — $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|-------|-------|"
+            echo "| Filtro | ${FILTRO_TXT} |"
+            echo "| Trigger | ${TRIGGER} |"
+            echo ""
+            echo "### Causas posibles"
+            echo "- **Secret ausente o expirado**: verificar \`NEON_DATABASE_URL\` en Settings → Secrets."
+            echo "- **Sitio superastro.com.co cambió su layout**: el scraper no encontró la tabla esperada."
+            echo "- **Timeout de conexión a Neon**: el servicio tardó más de lo esperado (reintentos agotados)."
+            echo "- **Datos desactualizados**: \`MAX(fecha)\` de alguna lotería es anterior al umbral de frescura."
+            echo ""
+            echo "### Últimas 40 líneas del log"
+            if [ -f /tmp/sync_output.txt ]; then
+              echo '```'
+              tail -40 /tmp/sync_output.txt
+              echo '```'
+            else
+              echo "_No se generó output — el fallo ocurrió antes de que el script arrancara._"
+            fi
+            echo ""
+            echo "> Ejecuta el workflow manualmente con \`workflow_dispatch\` después de corregir el problema."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 2 — Propagar master → dev y me
+  # Está separado a propósito: si falla, el resumen NO culpa a Neon.
+  # ════════════════════════════════════════════════════════════════════
+  propagate:
+    name: Propagar master a dev y me
+    needs: sync
+    if: needs.sync.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout con historial completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # necesario para encontrar el ancestro común en los merges
+          # Con GITHUB_TOKEN no se pueden empujar cambios que modifiquen
+          # .github/workflows/. Si defines el secret GH_PAT (PAT con permisos
+          # "contents: write" y "workflow"), se usa en su lugar.
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - name: Fusionar master en dev y me
+        run: |
+          set -uo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin --prune
+
+          FALLOS=()
+          RESULTADO=""
+
+          for RAMA in dev me; do
+            # 1) La rama debe existir en el remoto
+            if ! git ls-remote --exit-code --heads origin "$RAMA" > /dev/null 2>&1; then
+              RESULTADO+="| \`$RAMA\` | ⚪ no existe en el remoto, omitida |"$'\n'
+              continue
+            fi
+
+            # 2) Si ya contiene a master, no hay nada que hacer
+            if git merge-base --is-ancestor origin/master "origin/$RAMA"; then
+              RESULTADO+="| \`$RAMA\` | ✅ ya estaba al día |"$'\n'
+              continue
+            fi
+
+            git checkout -B "$RAMA" "origin/$RAMA"
+
+            # 3) Fast-forward si es posible; si no, merge normal
+            if git merge origin/master --ff-only --no-edit; then
+              :
+            elif git merge origin/master --no-edit -m "chore: sync $RAMA with master [skip ci]"; then
+              :
+            else
+              git merge --abort 2>/dev/null || true
+              FALLOS+=("$RAMA (conflicto de merge)")
+              RESULTADO+="| \`$RAMA\` | ❌ conflicto de merge |"$'\n'
+              continue
+            fi
+
+            # 4) Push
+            if git push origin "$RAMA"; then
+              RESULTADO+="| \`$RAMA\` | ✅ actualizada |"$'\n'
+            else
+              FALLOS+=("$RAMA (push rechazado)")
+              RESULTADO+="| \`$RAMA\` | ❌ push rechazado |"$'\n'
+            fi
+          done
+
+          {
+            echo "## Propagación de ramas — $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo ""
+            echo "| Rama | Resultado |"
+            echo "|------|-----------|"
+            printf "%s" "$RESULTADO"
+            if [ ${#FALLOS[@]} -gt 0 ]; then
+              echo ""
+              echo "### Cómo resolver"
+              echo "- **Push rechazado**: suele ser branch protection, o que el merge modifica \`.github/workflows/\` y el \`GITHUB_TOKEN\` no tiene permiso. Define el secret \`GH_PAT\`."
+              echo "- **Conflicto de merge**: hacer el merge de \`master\` manualmente en esa rama."
+              echo ""
+              echo "> La base de datos Neon **sí** se actualizó: el job de sincronización terminó correctamente."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ ${#FALLOS[@]} -gt 0 ]; then
+            echo "::error::Falló la propagación en: ${FALLOS[*]}"
+            exit 1
           fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "> Ejecuta el workflow manualmente con \`workflow_dispatch\` después de corregir el problema." >> "$GITHUB_STEP_SUMMARY"
